@@ -78,7 +78,7 @@ export function validateTrip(f: TripInput): TripErrors {
   if (!f.end) e.end = 'Escolha a data de volta.';
   else if (f.start && f.end < f.start) e.end = 'A volta precisa ser depois da ida.';
   else if (f.start && countDays(f.start, f.end) > 60) e.end = 'Planeje viagens de até 60 dias.';
-  if (!(Number(f.budget) > 0)) e.budget = 'Informe um orçamento maior que zero.';
+  if (f.budget && !(Number(f.budget) >= 0)) e.budget = 'Confira o valor do orçamento.';
   if (!f.styles.length) e.styles = 'Escolha pelo menos um estilo.';
   if (f.legs.length && f.start && f.end && f.end >= f.start) {
     const n = countDays(f.start, f.end), extra = f.legs.reduce((a, l) => a + l.days, 0);
@@ -94,7 +94,7 @@ export function createTrip(f: TripInput): TripErrors {
   const n = countDays(f.start, f.end);
   const firstDays = n - f.legs.reduce((a, l) => a + l.days, 0);
   const legs: Leg[] | undefined = f.legs.length ? [{ destId: d.id, name: d.name, days: firstDays }].concat(f.legs.map((l) => ({ destId: l.destId, name: legName(l), days: l.days }))) : undefined;
-  const budget = Math.round(Number(f.budget) * 100) / 100;
+  const budget = Math.round((Number(f.budget) || 0) * 100) / 100;
   const u = S().user;
   const trip: Trip = {
     id: uid('t'), destId: d.id,
@@ -210,14 +210,14 @@ export function saveTripEdit(f: TripEdit): Record<string, string> {
   if (!f.end) e.end = 'Escolha a data de volta.';
   else if (f.end < f.start) e.end = 'A volta precisa ser depois da ida.';
   else if (countDays(f.start, f.end) > 60) e.end = 'Planeje viagens de até 60 dias.';
-  if (!(Number(f.budget) > 0)) e.budget = 'Informe um orçamento maior que zero.';
+  if (f.budget && !(Number(f.budget) >= 0)) e.budget = 'Confira o valor do orçamento.';
   if (!f.styles.length) e.styles = 'Escolha pelo menos um estilo.';
   if (f.stops && f.stops.length > 1 && f.start && f.end && f.end >= f.start) {
     const extra = f.stops.slice(1).reduce((a, x) => a + x.days, 0);
     if (countDays(f.start, f.end) - extra < 1) e.legs = 'A soma dos dias das paradas passa do total da viagem. Diminua os dias de alguma parada.';
   }
   if (Object.keys(e).length) return e;
-  const u = snap(), n = countDays(f.start, f.end), budget = Math.round(Number(f.budget) * 100) / 100;
+  const u = snap(), n = countDays(f.start, f.end), budget = Math.round((Number(f.budget) || 0) * 100) / 100;
   let regenerated = 0;
   updateTrip((t) => {
     const changedBudget = budget !== t.budget;

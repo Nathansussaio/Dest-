@@ -27,8 +27,9 @@ export function tripInfo(t: Trip, s: State) {
     travelers: plural(t.travelers, 'viajante', 'viajantes'),
     actsLabel: plural(acts, 'atividade', 'atividades'),
     planPct: n ? Math.round((plannedDays / n) * 100) : 0,
-    budgetPct: t.budget ? Math.min(100, (spent / t.budget) * 100) : 0, over: spent > t.budget,
-    budget: brl(t.budget), spentLabel: brl(spent),
+    budgetPct: t.budget ? Math.min(100, (spent / t.budget) * 100) : 0, over: t.budget > 0 && spent > t.budget,
+    budget: t.budget ? brl(t.budget) : 'sem orçamento', spentLabel: brl(spent),
+    spentOf: t.budget ? brl(spent) + ' de ' + brl(t.budget) : brl(spent) + ' gastos · sem orçamento',
     resLabel: plural(res.length, 'reserva', 'reservas') + (pend ? ' · ' + plural(pend, 'pendente', 'pendentes') : ''),
     checkLabel: cdone + ' de ' + cl.length + ' prontos', checkPct: cl.length ? Math.round((cdone / cl.length) * 100) : 0,
     savedLabel: plural(savedHere, 'lugar salvo', 'lugares salvos')
@@ -67,7 +68,7 @@ export function TripRow({ t, s }: { t: Trip; s: State }) {
         <T v="smallMuted" lines={1}>{v.period + ' · ' + plural(v.n, 'dia', 'dias') + ' · ' + v.travelers}</T>
         <Row gap={14}>
           <Row gap={5}><Icon name="calendar" size={15} color={c.muted} /><T v="smallMuted">{v.actsLabel}</T></Row>
-          <Row gap={5}><Icon name="wallet" size={15} color={c.muted} /><T v="smallMuted">{v.spentLabel + ' de ' + v.budget}</T></Row>
+          <Row gap={5}><Icon name="wallet" size={15} color={c.muted} /><T v="smallMuted">{v.spentOf}</T></Row>
         </Row>
       </View>
     </Card>

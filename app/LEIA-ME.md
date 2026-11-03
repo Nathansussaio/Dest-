@@ -74,6 +74,8 @@ O arquivo `.env` nunca vai para o GitHub nem para as lojas: ele já está no `.g
   - **editar as paradas** de uma viagem já criada, em Editar viagem: trocar, incluir, tirar e reordenar cidades e mudar os dias. Os dias já montados continuam na mesma cidade, e os dias novos são montados automaticamente;
   - na página da viagem, **clima e hotéis de cada parada**, com as datas de cada cidade;
   - o roteiro automático inclui o dia de deslocamento entre as cidades, e a página da viagem mostra as paradas com as datas de cada uma.
+- **Orçamento opcional:** ao criar ou editar uma viagem, o orçamento pode ficar em branco. Sem ele, a tela de gastos mostra só o total gasto, com a opção "Definir orçamento".
+- **Arrastar atividades entre dias:** no roteiro, segure no ⠿ de uma atividade e solte em cima de outro dia, na faixa de dias do topo. Em Editar dia, continua existindo o botão de mover para outro dia.
 - **Backup em arquivo:** em Perfil › Backup, dá para baixar um arquivo com todas as viagens, gastos e reservas e restaurar depois, neste ou em outro aparelho. Isso funciona mesmo sem a nuvem.
 - **Previsão do tempo real:** nos 16 dias antes da viagem, aparece a previsão de cada dia na página da viagem e no topo de cada dia do roteiro. Antes disso, aparece o clima típico do mês.
 - **Pessoas da viagem:** quem vai junto entra pelo nome, para dividir os gastos neste celular. Mandar o roteiro para o grupo continua funcionando.

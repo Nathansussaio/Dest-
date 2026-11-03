@@ -1,6 +1,6 @@
 /* Viagem: criar, confirmação, detalhes, roteiro dia a dia, adicionar lugar, mapa e lugar */
-import React, { useState } from 'react';
-import { View, Pressable, Linking, ScrollView, useWindowDimensions } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, Pressable, Linking, ScrollView, useWindowDimensions, PanResponder, Platform } from 'react-native';
 import { useApp, setState } from '../store/store';
 import { BOOKING_AFFILIATE_ID, GETYOURGUIDE_PARTNER_ID } from '../config';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import * as A from '../store/actions';
 import {
   T, Row, Grow, Gap, Card, Btn, LinkBtn, IconBtn, Icon, Chip, Chips, Seg, Input, Field, DateRange, TimeStepper, Note, TileIcon,
   Section, ListRow, List, Empty, TopBar, Screen, Cover, Bar, PlaceThumb, Avatar, Pill, Cols, Grid
-, Picklist, RangeCalendar } from '../ui';
+, Picklist, RangeCalendar, shadow as shadowStyle } from '../ui';
 import { useTheme, useSite, useSiteWide, usePad, SITE_MAX } from '../theme/useTheme';
 import { tripInfo, PlaceCard, NoTrip } from './common';
 import { PlacesMap } from './maps/PlacesMap';
@@ -128,7 +128,7 @@ export function Create() {
   const inner = blockW - 40;
   const months: 1 | 2 = inner >= 600 ? 2 : 1;
   const daily = n && Number(budget) > 0 ? Number(budget) / travelers / n : null;
-  const done = [!!(picked || matched), !!valid, Number(budget) > 0, styles.length > 0];
+  const done = [!!(picked || matched), !!valid, true, styles.length > 0];
   const tileK = Math.max(2, Math.min(4, Math.floor((inner + 10) / 150)));
   const tileW = (inner - 10 * (tileK - 1)) / tileK;
   const tplK = inner >= 820 ? 3 : inner >= 440 ? 2 : 1;
@@ -302,7 +302,7 @@ export function Create() {
   );
 
   const b3 = (
-    <Block fill={twoCols} n={3} done={done[2]} title="Quem vai e orçamento" sub="Quantas pessoas vão e quanto pretendem gastar">
+    <Block fill={twoCols} n={3} done={done[2]} title="Quem vai e orçamento" sub="O orçamento é opcional: preencha só se quiser acompanhar os gastos">
       <Field label="Viajantes">
         <Row gap={14}>
           <IconBtn icon="minus" label="Menos um viajante" onPress={() => setTrav(Math.max(1, travelers - 1))} />
@@ -310,7 +310,7 @@ export function Create() {
           <IconBtn icon="plus" label="Mais um viajante" onPress={() => setTrav(Math.min(20, travelers + 1))} />
         </Row>
       </Field>
-      <Field label="Orçamento total" error={err.budget} style={{ marginBottom: 0 }}>
+      <Field label="Orçamento total (opcional)" error={err.budget} style={{ marginBottom: 0 }}>
         <Input prefix="R$" value={budget ? fmtMoney(Number(budget)) : ''} onChangeText={(v) => setBudget(maskToValue(v))} keyboard="number-pad" placeholder="0,00" error={!!err.budget} />
         <Gap h={10} />
         <Chips>{[5000, 10000, 15000, 25000].map((v) => <Chip key={v} label={brl(v)} on={Number(budget) === v} onPress={() => setBudget(String(v))} />)}</Chips>
@@ -384,7 +384,7 @@ export function Create() {
           ['calendar', n ? fmtShort(start) + ' a ' + fmtShort(end) + ' · ' + plural(n, 'dia', 'dias') : 'Datas a definir'],
           stops.length > 1 ? ['map', plural(stops.length, 'parada', 'paradas') + (stopCountries.length > 1 ? ' em ' + plural(stopCountries.length, 'país', 'países') + ': ' + stopCountries.join(', ') : '')] : null,
           ['users', plural(travelers, 'viajante', 'viajantes')],
-          ['wallet', Number(budget) > 0 ? 'Orçamento de ' + money(Number(budget)) + (daily ? ' · ' + money(daily) + ' por pessoa/dia' : '') : 'Orçamento a definir'],
+          ['wallet', Number(budget) > 0 ? 'Orçamento de ' + money(Number(budget)) + (daily ? ' · ' + money(daily) + ' por pessoa/dia' : '') : 'Sem orçamento (opcional)'],
           ['sparkle', (styles.length ? styles.join(' + ') : 'Estilo a definir') + ' · ritmo ' + (PACE_BY_ID[pace] || PACES[1]).label.toLowerCase()],
           wc ? [wc.icon, wc.hi + '° / ' + wc.lo + '° em ' + wc.monthsLabel] : null
         ].filter(Boolean).map((r) => <Row key={r![0] + r![1]} gap={10}><Icon name={r![0]} size={18} color={c.ink2} /><Grow><T v="small">{r![1]}</T></Grow></Row>)}
@@ -728,7 +728,7 @@ export function TripScreen() {
         <T v="smallMuted" center style={{ marginTop: 8 }}>{v.actsLabel + ' · ' + v.plannedDays + ' de ' + v.n + ' dias com planos'}</T>
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 18 }}>
-          <Tile icon="receipt" title="Gastos" sub={v.spentLabel + ' de ' + v.budget} pct={v.budgetPct} over={v.over} onPress={() => A.tab('expenses', { tripId: t.id })} />
+          <Tile icon="receipt" title="Gastos" sub={v.spentOf} pct={v.budgetPct} over={v.over} onPress={() => A.tab('expenses', { tripId: t.id })} />
           <Tile icon="ticket" title="Reservas" sub={v.resLabel} onPress={() => A.go('docs', { sheetArg: 'reservas' })} />
           <Tile icon="doc" title="Documentos" sub={v.checkLabel} pct={v.checkPct} onPress={() => A.go('docs', { sheetArg: 'docs' })} />
           <Tile icon="map" title="Mapa" sub={plural(v.acts, 'ponto', 'pontos') + ' no mapa'} onPress={() => A.go('map')} />
@@ -864,7 +864,7 @@ function TopOverlay({ right, title }: { right?: React.ReactNode; title?: string 
 /* ====================== Roteiro dia a dia ====================== */
 export function Itinerary() {
   const s = useApp();
-  const { c } = useTheme();
+  const { c, isDark: isDarkTheme } = useTheme();
   const [editing, setEditing] = useState(false);
   const [swapFor, setSwapFor] = useState<string | null>(null);
   const [transitOpen, setTransitOpen] = useState<string | null>(null);
@@ -876,6 +876,14 @@ export function Itinerary() {
   const pad = usePad();
   const t = A.currentTrip();
   const fc = useForecast(t);
+  /* arrastar uma atividade até outro dia (solta em cima do dia, na faixa de dias do topo) */
+  const rootRef = useRef<any>(null);
+  const chipRefs = useRef<any[]>([]);
+  const zones = useRef<{ i: number; x: number; y: number; w: number; h: number }[]>([]);
+  const origin = useRef({ x: 0, y: 0 });
+  const dragRef = useRef<{ id: string; label: string; x: number; y: number; over: number | null } | null>(null);
+  const [drag, setDragState] = useState<{ id: string; label: string; x: number; y: number; over: number | null } | null>(null);
+  const setDrag = (d: typeof drag) => { dragRef.current = d; setDragState(d); };
   if (!t) return <Screen><NoTrip /></Screen>;
   const dayIdx = Math.min(s.day, t.days.length - 1);
   const start = parseD(t.start), dDate = addDays(start, dayIdx), dayISO = iso(dDate);
@@ -888,6 +896,40 @@ export function Itinerary() {
   const dayRes = s.reservations.filter((r) => r.tripId === t.id && r.date === dayISO).sort((a, b) => ((a.time || '00:00') < (b.time || '00:00') ? -1 : 1));
   const v = tripInfo(t, s);
   const pick = (i: number) => { setSwapFor(null); setMoveFor(null); setState({ day: i }); };
+  const measureWin = (ref: any, cb: (x: number, y: number, w: number, h: number) => void) => {
+    if (!ref) return;
+    if (typeof ref.measureInWindow === 'function') ref.measureInWindow(cb);
+    else if (typeof ref.getBoundingClientRect === 'function') { const r = ref.getBoundingClientRect(); cb(r.left, r.top, r.width, r.height); }
+  };
+  const overDay = (x: number, y: number) => { const z = zones.current.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y - 12 && y <= r.y + r.h + 12); return z ? z.i : null; };
+  const dragger = (item: ItineraryItem) => PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant: (_e: any, g: any) => {
+      zones.current = [];
+      measureWin(rootRef.current, (x, y) => { origin.current = { x, y }; });
+      chipRefs.current.forEach((r, i) => measureWin(r, (x, y, w, h) => { zones.current.push({ i, x, y, w, h }); }));
+      setDrag({ id: item.id, label: itemName(item), x: g.x0, y: g.y0, over: null });
+    },
+    onPanResponderMove: (_e: any, g: any) => {
+      if (!dragRef.current) return;
+      setDrag({ ...dragRef.current, x: g.moveX, y: g.moveY, over: overDay(g.moveX, g.moveY) });
+    },
+    onPanResponderRelease: () => {
+      const d = dragRef.current;
+      setDrag(null);
+      if (d && d.over !== null && d.over !== dayIdx) A.moveToDay(d.id, d.over);
+      else if (d && d.over === null) A.showToast('Solte em cima de um dos dias no topo da tela');
+    },
+    onPanResponderTerminate: () => setDrag(null)
+  });
+  const grip = (item: ItineraryItem) => (
+    <View {...dragger(item).panHandlers} accessibilityLabel={'Arrastar ' + itemName(item) + ' para outro dia'}
+      style={[{ width: 34, alignSelf: 'stretch', alignItems: 'center', justifyContent: 'center' }, Platform.OS === 'web' ? ({ cursor: 'grab', touchAction: 'none', userSelect: 'none' } as any) : null]}>
+      <Icon name="grip" size={18} color={c.faint} strokeWidth={3} />
+    </View>
+  );
   const prevPlace = (k: number) => { for (let j = k - 1; j >= 0; j--) if (shown[j].kind === 'place' && shown[j].placeId) return PLACE_BY_ID[shown[j].placeId!]; return null; };
 
   /* deslocamentos entre lugares seguidos */
@@ -974,7 +1016,7 @@ export function Itinerary() {
                     </Grow>
                   </Pressable>
                   <IconBtn icon="refresh" flat size={40} label={'Trocar ' + p.name} onPress={() => setSwapFor(swapOpen ? null : x.id)} />
-                  <View style={{ width: 8 }} />
+                  {t!.days.length > 1 ? grip(x) : <View style={{ width: 8 }} />}
                 </Row>
                 {closedNow ? <Note kind="err" style={{ marginHorizontal: 12, marginBottom: 12 }}>{'Fecha às ' + DOW_PLURAL[dDate.getDay()] + ': troque o lugar ou mude de dia'}</Note> : null}
               </Card>
@@ -996,6 +1038,7 @@ export function Itinerary() {
             <View style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, backgroundColor: x.kind === 'note' ? c.noteBg : c.soft, flexDirection: 'row', gap: 8, alignItems: 'center' }}>
               <Icon name={x.kind === 'move' ? 'route' : 'info'} size={16} color={x.kind === 'note' ? c.noteText : c.ink2} />
               <Grow><T v="small" color={x.kind === 'note' ? c.noteText : c.ink2}>{x.text || ''}</T></Grow>
+              {t!.days.length > 1 ? grip(x) : null}
             </View>
           )}
         </Grow>
@@ -1006,6 +1049,7 @@ export function Itinerary() {
   const regenLabel = regenSel.length ? 'Montar ' + (regenSel.length === 1 ? 'o Dia ' + (regenSel[0] + 1) : plural(regenSel.length, 'dia', 'dias')) + ' de novo' : 'Gerar roteiro completo';
   const catalogOk = tripLegs(t).some((l) => hasCatalog(l.destId));
   return (
+    <View ref={rootRef} style={{ flex: 1 }}>
     <Screen>
       <TopBar title={'Roteiro · ' + t.name} onBack={A.back} right={<IconBtn icon="map" label="Mapa" onPress={() => A.go('map')} />} />
       <Cols main={<>
@@ -1013,13 +1057,15 @@ export function Itinerary() {
         {t.days.map((d, i) => {
           const dt = addDays(start, i), on = i === dayIdx;
           return (
-            <Pressable key={i} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={'Dia ' + (i + 1) + ', ' + SEM_LONGO[dt.getDay()] + ' ' + dt.getDate()} onPress={() => pick(i)}
-              style={{ width: 58, paddingVertical: 8, borderRadius: 14, alignItems: 'center', backgroundColor: on ? c.ink : c.card, borderWidth: 1, borderColor: on ? c.ink : c.line2 }}>
+            <View key={i} ref={(r: any) => { chipRefs.current[i] = r; }}>
+            <Pressable accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={'Dia ' + (i + 1) + ', ' + SEM_LONGO[dt.getDay()] + ' ' + dt.getDate()} onPress={() => pick(i)}
+              style={{ width: 58, paddingVertical: 8, borderRadius: 14, alignItems: 'center', backgroundColor: drag && drag.over === i && i !== dayIdx ? c.accTint : on ? c.ink : c.card, borderWidth: drag && drag.over === i && i !== dayIdx ? 2 : 1, borderColor: drag && drag.over === i && i !== dayIdx ? c.accBg : on ? c.ink : c.line2 }}>
               <T v="smallMuted" color={on ? c.onInk : undefined}>{SEM[dt.getDay()]}</T>
               <T v="h2" color={on ? c.onInk : undefined}>{String(dt.getDate())}</T>
               <T v="smallMuted" color={on ? c.onInk : undefined} style={{ fontSize: 11 }}>{'Dia ' + (i + 1)}</T>
               <View style={{ width: 5, height: 5, borderRadius: 3, marginTop: 3, backgroundColor: d.length ? (on ? c.onInk : c.accBg) : 'transparent' }} />
             </Pressable>
+            </View>
           );
         })}
       </ScrollView>
@@ -1040,6 +1086,7 @@ export function Itinerary() {
       ) : null}
       {!dayItems.length ? <Empty icon="calendar" title="Nenhuma atividade neste dia" text="Adicione lugares do catálogo ou peça uma sugestão." /> : null}
       {transitSummary && !editing ? <Row gap={6} style={{ marginBottom: 12 }}><Icon name="route" size={15} color={c.muted} /><Grow><T v="smallMuted">{transitSummary + ' · toque num trecho para ver como ir'}</T></Grow></Row> : null}
+      {t.days.length > 1 && dayItems.length && !editing ? <Row gap={6} style={{ marginBottom: 12, marginTop: transitSummary ? -6 : 0 }}><Icon name="grip" size={15} color={c.muted} strokeWidth={3} /><Grow><T v="smallMuted">Para mudar uma atividade de dia, segure no ⠿ e arraste até o dia no topo.</T></Grow></Row> : null}
       {rows}
       {editing ? <T v="smallMuted" style={{ marginBottom: 10 }}>Use − e + para mudar o horário. As setas trocam a posição de dois itens vizinhos; o calendário leva o item a outro dia. Ao concluir, o dia é ordenado por horário.</T> : null}
 
@@ -1088,6 +1135,20 @@ export function Itinerary() {
       </Card>
       </>} />
     </Screen>
+    {drag ? (
+      <>
+        <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, alignItems: 'center', paddingTop: 8 }}>
+          <View style={{ backgroundColor: c.ink, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
+            <T v="small" color={c.onInk} style={{ fontWeight: '700' }}>{drag.over !== null && drag.over !== dayIdx ? 'Solte para mover para o Dia ' + (drag.over + 1) : 'Arraste até um dos dias no topo'}</T>
+          </View>
+        </View>
+        <View pointerEvents="none" style={[{ position: 'absolute', left: drag.x - origin.current.x - 24, top: drag.y - origin.current.y - 22, maxWidth: 260, backgroundColor: c.card, borderRadius: 14, borderWidth: 2, borderColor: drag.over !== null && drag.over !== dayIdx ? c.accBg : c.line2, paddingHorizontal: 12, paddingVertical: 10, flexDirection: 'row', gap: 8, alignItems: 'center', opacity: 0.96 }, shadowStyle(isDarkTheme)]}>
+          <Icon name="grip" size={16} color={c.muted} strokeWidth={3} />
+          <T v="small" style={{ fontWeight: '700' }} lines={1}>{drag.label}</T>
+        </View>
+      </>
+    ) : null}
+    </View>
   );
 }
 

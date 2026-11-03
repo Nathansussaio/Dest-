@@ -139,7 +139,7 @@ function EditTripSheet() {
   const [start, setStart] = useState(t.start);
   const [end, setEnd] = useState(t.end);
   const [travelers, setTrav] = useState(t.travelers);
-  const [budget, setBudget] = useState(String(t.budget));
+  const [budget, setBudget] = useState(t.budget ? String(t.budget) : '');
   const [styles, setStyles] = useState<Style[]>(t.styles.slice());
   const [pace, setPace] = useState<PaceId>(t.pace || 'equilibrado');
   const [err, setErr] = useState<Record<string, string>>({});
@@ -210,7 +210,7 @@ function EditTripSheet() {
           <IconBtn icon="plus" label="Mais um viajante" onPress={() => setTrav(Math.min(20, travelers + 1))} />
         </Row>
       </Field>
-      <Field label="Orçamento total" error={err.budget}><Input prefix="R$" value={budget ? fmtMoney(Number(budget)) : ''} onChangeText={(v) => setBudget(maskToValue(v))} keyboard="number-pad" error={!!err.budget} /></Field>
+      <Field label="Orçamento total (opcional)" error={err.budget}><Input prefix="R$" placeholder="Sem orçamento" value={Number(budget) ? fmtMoney(Number(budget)) : ''} onChangeText={(v) => setBudget(maskToValue(v))} keyboard="number-pad" error={!!err.budget} /></Field>
       <Field label="Estilo" error={err.styles}><Picklist label="Estilo" placeholder="Escolha até 2 estilos" error={!!err.styles} options={STYLES.map((st) => ({ id: st, label: st, icon: STYLE_INFO[st].icon, hint: STYLE_INFO[st].short }))} value={styles} onToggle={(id) => toggle(id as any)} /></Field>
       <Field label="Ritmo"><Seg value={pace} onChange={setPace} options={PACES.map((p) => ({ id: p.id, label: p.label }))} /></Field>
       <Btn label="Salvar" block onPress={() => setErr(A.saveTripEdit({ start, end, travelers, budget, styles, pace, stops }))} />

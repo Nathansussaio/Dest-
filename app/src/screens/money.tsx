@@ -59,11 +59,16 @@ export function Expenses() {
           <View><T v="smallMuted">Hoje</T><T v="h2">{money(todaySum)}</T></View>
           <View style={{ alignItems: 'flex-end' }}><T v="smallMuted">Total da viagem</T><T v="h2">{money(total)}</T></View>
         </Row>
-        <Bar pct={t.budget ? (total / t.budget) * 100 : 0} over={total > t.budget} />
+        {t.budget ? <><Bar pct={(total / t.budget) * 100} over={total > t.budget} />
         <Row between>
           <T v="small" color={left >= 0 ? c.muted : c.warnText} style={{ fontWeight: left >= 0 ? '400' : '700' }}>{left >= 0 ? 'Restam ' + money(left) : 'Acima em ' + money(-left)}</T>
           <LinkBtn label={'Orçamento ' + brl(t.budget)} onPress={() => A.openSheet('editTrip')} />
-        </Row>
+        </Row></> : (
+          <Row between>
+            <T v="smallMuted">Sem orçamento definido. Se quiser, defina um valor para acompanhar quanto ainda pode gastar.</T>
+            <LinkBtn label="Definir orçamento" onPress={() => A.openSheet('editTrip')} />
+          </Row>
+        )}
         {s.prefs.notif.orcamento && t.budget && total / t.budget >= 0.9 && total <= t.budget ? <Note kind="note">Você já usou mais de 90% do orçamento.</Note> : null}
       </Card>
       <Row gap={10} style={{ marginTop: 12 }}>
@@ -132,15 +137,15 @@ export function Expenses() {
         <Card style={{ padding: 14, gap: 14 }}>
           {BUDGET_CATS.map((k) => {
             const sp = exps.filter((e) => e.cat === k.id).reduce((a, e) => a + (Number(e.amount) || 0), 0);
-            const plan = (t.plan && t.plan[k.id]) || 0, over = sp > plan;
+            const plan = (t.plan && t.plan[k.id]) || 0, over = plan > 0 && sp > plan;
             return (
               <View key={k.id} style={{ gap: 6 }}>
-                <Row><CatIcon name={k.icon} /><Grow><T v="lt" style={{ fontSize: 15 }}>{k.label}</T><T v="smallMuted">{money(sp) + ' de ' + brl(plan)}</T></Grow><T v="small" color={over ? c.warnText : c.muted}>{over ? 'Acima em ' + brl(sp - plan) : 'Restam ' + brl(plan - sp)}</T></Row>
+                <Row><CatIcon name={k.icon} /><Grow><T v="lt" style={{ fontSize: 15 }}>{k.label}</T><T v="smallMuted">{plan ? money(sp) + ' de ' + brl(plan) : money(sp)}</T></Grow><T v="small" color={over ? c.warnText : c.muted}>{!plan ? '' : over ? 'Acima em ' + brl(sp - plan) : 'Restam ' + brl(plan - sp)}</T></Row>
                 <Bar pct={plan ? (sp / plan) * 100 : sp > 0 ? 100 : 0} over={over} height={6} />
               </View>
             );
           })}
-          <T v="smallMuted">A divisão por categoria é uma sugestão a partir do orçamento total. Ajuste em Editar viagem.</T>
+          <T v="smallMuted">{t.budget ? 'A divisão por categoria é uma sugestão a partir do orçamento total. Ajuste em Editar viagem.' : 'Com um orçamento definido, o app sugere quanto separar para cada categoria.'}</T>
         </Card>
       ) : null}
 
