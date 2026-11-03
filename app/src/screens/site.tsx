@@ -135,11 +135,13 @@ export function SiteHeader() {
 
 const FEATURES = [
   { icon: 'calendar', title: 'Roteiro no seu estilo', text: 'Escolha destino, datas e estilo. O Destí monta os dias com lugares que combinam entre si e avisa quando algo fecha.' },
-  { icon: 'route', title: 'Como ir de um lugar ao outro', text: 'Metrô, ônibus, a pé ou carro entre os pontos do dia, com o tempo estimado e a rota no mapa.' },
-  { icon: 'wallet', title: 'Orçamento e divisão', text: 'Gastos em real, euro ou dólar. Para viagens em grupo, o app calcula quem deve para quem.' },
+  { icon: 'map', title: 'Vários países numa viagem', text: 'Roteiros prontos pela Europa, Ásia e Américas, ou monte o seu com cidades de qualquer lugar do mundo.' },
+  { icon: 'train', title: 'Como ir de um lugar ao outro', text: 'Entre cidades: avião, trem, ônibus, barco ou carro. Dentro delas: metrô, ônibus ou a pé, com o tempo estimado.' },
+  { icon: 'receipt', title: 'Orçamento e divisão', text: 'Gastos em real, euro ou dólar. Para viagens em grupo, o app calcula quem deve para quem.' },
   { icon: 'ticket', title: 'Reservas organizadas', text: 'Voos, hotéis e ingressos por data, junto do roteiro de cada dia, com lembretes antes da viagem.' },
   { icon: 'cloudSun', title: 'Clima e o que levar', text: 'Previsão nos dias da viagem, clima típico do mês e uma lista de preparação pronta.' },
-  { icon: 'share', title: 'Compartilhe com quem vai', text: 'Mande o roteiro pelo WhatsApp ou em PDF, sem mostrar códigos de reserva.' }
+  { icon: 'share', title: 'Compartilhe com quem vai', text: 'Mande o roteiro pelo WhatsApp ou em PDF, sem mostrar códigos de reserva.' },
+  { icon: 'wallet', title: 'Cotação do dia', text: 'Dólar, euro e libra em reais no topo do site, atualizados ao longo do dia.' }
 ];
 const STEPS = [
   { title: 'Escolha o destino', text: 'Mais de 60 cidades com roteiro automático, ou qualquer lugar do mundo para montar do seu jeito.' },

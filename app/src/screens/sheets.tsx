@@ -8,7 +8,7 @@ import * as A from '../store/actions';
 import { T, Row, Grow, Gap, Btn, LinkBtn, IconBtn, Icon, Chip, Chips, Seg, Input, Field, DateField, DateRange, TimeStepper, Note, Avatar, Card, Divider, ListRow, Picklist } from '../ui';
 import { useTheme, useWide } from '../theme/useTheme';
 import { radius, isIOS } from '../theme/theme';
-import { BUDGET_CATS, CUR_SYMBOL, DEMO_RATES, STYLES, STYLE_INFO, PACES, RES_TYPES } from '../data';
+import { BUDGET_CATS, CUR_SYMBOL, DEMO_RATES, STYLES, STYLE_INFO, PACES, RES_TYPES, DESTINATIONS, searchDest, continentOf, countryOf } from '../data';
 import type { Expense, Reservation, Style, PaceId } from '../types';
 import { tripCurrency, tripLegs, legName } from '../lib/trip';
 import { tripMembers, memberName } from '../lib/group';
@@ -144,7 +144,19 @@ function EditTripSheet() {
   const [pace, setPace] = useState<PaceId>(t.pace || 'equilibrado');
   const [err, setErr] = useState<Record<string, string>>({});
   const [confirm, setConfirm] = useState(false);
+  const [stops, setStops] = useState(tripLegs(t).map((L) => ({ destId: L.destId, name: legName(L), days: L.days })));
+  const [pick, setPick] = useState<number | null>(null);
+  const [q, setQ] = useState('');
   const n = start && end && end >= start ? countDays(start, end) : null;
+  const firstDays = n === null ? null : n - stops.slice(1).reduce((a, x) => a + x.days, 0);
+  const stopCountries = stops.map((x) => countryOf(x.destId)).filter((x, i, a) => x && a.indexOf(x) === i);
+  const moveStop = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= stops.length) return; const all = stops.slice(); const tmp = all[i]; all[i] = all[j]; all[j] = tmp; setStops(all); setPick(null); };
+  const suggest = () => {
+    const used = stops.map((x) => x.destId), cont = continentOf(stops[stops.length - 1].destId);
+    const near = DESTINATIONS.filter((d) => used.indexOf(d.id) < 0 && cont && continentOf(d.id) === cont);
+    return near.concat(DESTINATIONS.filter((d) => used.indexOf(d.id) < 0 && near.indexOf(d) < 0)).slice(0, 6);
+  };
+  const addStop = () => { const sg = suggest()[0] || DESTINATIONS[0]; setStops(stops.concat([{ destId: sg.id, name: sg.name, days: 2 }])); setPick(stops.length); setQ(''); };
   const cut = n && n < t.days.length && t.days.slice(n).some((d) => d.length);
   const toggle = (st: Style) => setStyles(styles.indexOf(st) >= 0 ? styles.filter((x) => x !== st) : styles.length >= 2 ? [styles[1], st] : styles.concat([st]));
   return (
@@ -153,7 +165,44 @@ function EditTripSheet() {
       <DateRange start={start} end={end} onStart={setStart} onEnd={setEnd} errStart={err.start} errEnd={err.end} />
       {n ? <T v="smallMuted" style={{ marginBottom: 6 }}>{plural(n, 'dia', 'dias') + ' de viagem'}</T> : null}
       {cut ? <Note kind="note" style={{ marginBottom: 10 }}>{'Com as novas datas, ' + (n! + 1 === t.days.length ? 'o Dia ' + t.days.length + ' sairá' : 'os dias ' + (n! + 1) + ' a ' + t.days.length + ' sairão') + ' do roteiro.'}</Note> : null}
-      <Gap h={8} />
+      <Field label={'Paradas' + (stopCountries.length > 1 ? ' · ' + plural(stopCountries.length, 'país', 'países') : '')} error={err.legs}>
+        <Card flat style={{ overflow: 'hidden' }}>
+          {stops.map((st, i) => (
+            <View key={i + st.destId} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: c.line, padding: 10, gap: 6 }}>
+              <Row gap={10}>
+                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T v="small" color={c.onInk} style={{ fontWeight: '700' }}>{String(i + 1)}</T></View>
+                <Grow>
+                  <Pressable accessibilityRole="button" accessibilityLabel={'Trocar ' + st.name} onPress={() => { setPick(pick === i ? null : i); setQ(''); }}>
+                    <Row gap={6}><T v="lt" lines={1}>{st.name}</T><Icon name="edit" size={14} color={c.muted} /></Row>
+                  </Pressable>
+                  <T v="smallMuted" lines={1}>{(countryOf(st.destId) || 'Destino') + ' · ' + (i === 0 ? (firstDays === null ? 'dias que sobram' : firstDays >= 1 ? plural(firstDays, 'dia', 'dias') + (stops.length > 1 ? ' (os que sobram)' : '') : 'sem dias sobrando') : plural(st.days, 'dia', 'dias'))}</T>
+                </Grow>
+                {stops.length > 1 ? <IconBtn icon="x" flat size={32} label={'Tirar ' + st.name} onPress={() => { setStops(stops.filter((_, k) => k !== i)); setPick(null); }} /> : null}
+              </Row>
+              {stops.length > 1 ? (
+                <Row gap={6} style={{ paddingLeft: 36 }}>
+                  {i > 0 ? <><IconBtn icon="minus" flat size={32} label={'Menos um dia em ' + st.name} onPress={() => setStops(stops.map((x, k) => (k === i ? { ...x, days: Math.max(1, x.days - 1) } : x)))} />
+                  <IconBtn icon="plus" flat size={32} label={'Mais um dia em ' + st.name} onPress={() => setStops(stops.map((x, k) => (k === i ? { ...x, days: Math.min(60, x.days + 1) } : x)))} /></> : null}
+                  <Grow />
+                  <IconBtn icon="chevU" flat size={32} label={'Subir ' + st.name} onPress={() => moveStop(i, -1)} />
+                  <IconBtn icon="chevD" flat size={32} label={'Descer ' + st.name} onPress={() => moveStop(i, 1)} />
+                </Row>
+              ) : null}
+              {pick === i ? (
+                <View style={{ gap: 6 }}>
+                  <Input value={q} onChangeText={setQ} icon="search" placeholder="Buscar cidade ou país" caps="words" />
+                  {(q ? searchDest(q) : suggest()).map((o) => (
+                    <ListRow key={o.id} title={o.name} sub={(o.kind === 'country' ? 'País inteiro · ' + o.country : o.country) + (o.kind === 'catalog' ? ' · roteiro automático' : '')}
+                      onPress={() => { setStops(stops.map((x, k) => (k === i ? { ...x, destId: o.id, name: o.name } : x))); setPick(null); }} />
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ))}
+        </Card>
+        {stops.length < 10 ? <View style={{ alignItems: 'flex-start', marginTop: 6 }}><LinkBtn label="+ Adicionar parada (cidade ou país)" onPress={addStop} /></View> : null}
+        <T v="smallMuted">Os dias que você já montou continuam na mesma cidade. Dias novos são montados automaticamente.</T>
+      </Field>
       <Field label="Viajantes">
         <Row gap={14}>
           <IconBtn icon="minus" label="Menos um viajante" onPress={() => setTrav(Math.max(1, travelers - 1))} />
@@ -164,7 +213,7 @@ function EditTripSheet() {
       <Field label="Orçamento total" error={err.budget}><Input prefix="R$" value={budget ? fmtMoney(Number(budget)) : ''} onChangeText={(v) => setBudget(maskToValue(v))} keyboard="number-pad" error={!!err.budget} /></Field>
       <Field label="Estilo" error={err.styles}><Picklist label="Estilo" placeholder="Escolha até 2 estilos" error={!!err.styles} options={STYLES.map((st) => ({ id: st, label: st, icon: STYLE_INFO[st].icon, hint: STYLE_INFO[st].short }))} value={styles} onToggle={(id) => toggle(id as any)} /></Field>
       <Field label="Ritmo"><Seg value={pace} onChange={setPace} options={PACES.map((p) => ({ id: p.id, label: p.label }))} /></Field>
-      <Btn label="Salvar" block onPress={() => setErr(A.saveTripEdit({ start, end, travelers, budget, styles, pace }))} />
+      <Btn label="Salvar" block onPress={() => setErr(A.saveTripEdit({ start, end, travelers, budget, styles, pace, stops }))} />
       <Gap h={18} />
       {confirm ? (
         <Card flat style={{ padding: 14, gap: 10 }}>

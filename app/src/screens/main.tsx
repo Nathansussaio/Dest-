@@ -411,6 +411,12 @@ export function Profile() {
         </>
       ) : null}
 
+      <GroupLabel>Backup</GroupLabel>
+      <List>
+        <ListRow icon="download" title="Baixar backup das viagens" sub="Um arquivo com viagens, gastos e reservas" chevron onPress={A.exportBackup} />
+        <ListRow icon="refresh" title="Restaurar de um backup" sub="Substitui os dados deste aparelho (dá para desfazer)" chevron onPress={A.importBackup} />
+      </List>
+      <Gap h={18} />
       <GroupLabel>Conta</GroupLabel>
       <List>
         <ListRow icon="logout" title={guest ? 'Sair do modo visitante' : 'Sair da conta'} onPress={A.logout} />

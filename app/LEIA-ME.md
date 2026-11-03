@@ -16,7 +16,7 @@ Abra o Terminal na pasta `desti` e rode:
 npm install
 npx expo install --fix      # alinha as versões dos pacotes com o SDK atual do Expo
 cp .env.exemplo .env        # depois preencha o .env (veja a seção 3)
-npm test                    # 18 testes das regras (roteiro, vários países, deslocamento entre cidades, clima, previsão, cotação, divisão de gastos…)
+npm test                    # 19 testes das regras (roteiro, vários países, deslocamento entre cidades, backup, clima, previsão, cotação, divisão de gastos…)
 npm run typecheck           # confere os tipos com os pacotes oficiais
 npx expo start              # mostra um QR code
 ```
@@ -71,7 +71,10 @@ O arquivo `.env` nunca vai para o GitHub nem para as lojas: ele já está no `.g
   - também dá para montar o próprio roteiro: cada parada pode ser uma cidade ou um país inteiro, de qualquer lugar do mundo, com os dias de cada parada, e as paradas podem ser reordenadas ou retiradas;
   - ao digitar uma região, como "Europa" ou "Ásia", o app sugere os roteiros prontos e as cidades daquela região;
   - **deslocamento entre as cidades:** para cada troca de cidade, o app sugere como ir (avião, trem, trem noturno, ônibus, barco ou carro), com o tempo aproximado e observações. São cerca de 80 trechos conhecidos entre as cidades do catálogo (por exemplo Paris–Londres pelo Eurostar, Buenos Aires–Montevidéu de barco, Viena–Budapeste pelo Danúbio). Nos outros trechos, a sugestão é uma estimativa pela distância. Em todos, há links para comparar horários e preços (Rome2rio) e para ver o trajeto no Google Maps. A sugestão aparece no dia da troca de cidade no roteiro, entre as paradas na página da viagem e na lista de paradas da Nova viagem; dentro de cada cidade, o app continua indicando metrô, ônibus, a pé ou carro entre os lugares;
+  - **editar as paradas** de uma viagem já criada, em Editar viagem: trocar, incluir, tirar e reordenar cidades e mudar os dias. Os dias já montados continuam na mesma cidade, e os dias novos são montados automaticamente;
+  - na página da viagem, **clima e hotéis de cada parada**, com as datas de cada cidade;
   - o roteiro automático inclui o dia de deslocamento entre as cidades, e a página da viagem mostra as paradas com as datas de cada uma.
+- **Backup em arquivo:** em Perfil › Backup, dá para baixar um arquivo com todas as viagens, gastos e reservas e restaurar depois, neste ou em outro aparelho. Isso funciona mesmo sem a nuvem.
 - **Previsão do tempo real:** nos 16 dias antes da viagem, aparece a previsão de cada dia na página da viagem e no topo de cada dia do roteiro. Antes disso, aparece o clima típico do mês.
 - **Pessoas da viagem:** quem vai junto entra pelo nome, para dividir os gastos neste celular. Mandar o roteiro para o grupo continua funcionando.
 - **Páginas e documentos:**
@@ -145,7 +148,19 @@ Para gerar e publicar:
 npm run build:web          # gera a pasta dist/ com o site completo
 ```
 
-**No Cloudflare Pages (grátis):**
+**Como o site está publicado hoje (GitHub Pages, automático):**
+
+- O código do app fica na pasta `app/` do repositório `Nathansussaio/Dest-`.
+- A cada mudança, o GitHub gera o site oficial com `expo export` (veja `.github/workflows/site.yml` no repositório) e publica em https://nathansussaio.github.io/Dest-/. Leva de 3 a 5 minutos.
+- Configurações, em Settings › Secrets and variables › Actions:
+  - **Secrets:** `EXPO_PUBLIC_SUPABASE_URL` e `EXPO_PUBLIC_SUPABASE_ANON_KEY` (login e backup na nuvem) e `EXPO_PUBLIC_SENTRY_DSN` (avisos de erro);
+  - **Variables:** `SITE_URL` (quando o domínio estiver pronto: `https://destiapp.com.br`), `EXPO_PUBLIC_BOOKING_AFFILIATE_ID`, `EXPO_PUBLIC_GETYOURGUIDE_PARTNER_ID` e `EXPO_PUBLIC_SUPPORT_EMAIL`.
+  - Depois de mudar uma configuração, rode de novo em Actions › Publicar o site › Run workflow.
+- **No site:**
+  - o mapa é real, do OpenStreetMap com desenho da CARTO, grátis e com os créditos na tela;
+  - o site já leva a imagem para compartilhar no WhatsApp e nas redes (`public/og-image.png`), além de `robots.txt` e `sitemap.xml` para o Google.
+
+**Outra opção, no Cloudflare Pages (grátis):**
 
 1. Crie um projeto e ligue ao repositório do GitHub, ou envie a pasta `dist/`.
 2. Configure assim:
@@ -165,7 +180,7 @@ O site fica no repositório `Nathansussaio/Dest-` (só os arquivos do site, sem 
 3. No GitHub, abra o repositório › **Settings › Pages** › **Custom domain**, digite `destiapp.com.br` e salve. Quando o certificado ficar pronto (de alguns minutos a algumas horas), marque **Enforce HTTPS**.
 4. O site passa a abrir em https://destiapp.com.br. Enquanto o domínio não estiver configurado, ele abre em https://nathansussaio.github.io/dest-.
 
-No site, o mapa aparece na versão aproximada. A previsão do tempo, o login e o backup funcionam igual ao app. As notificações e a biometria existem só no app de celular.
+No site, o mapa é real (OpenStreetMap); se não carregar, aparece a versão aproximada. A previsão do tempo, o login e o backup funcionam igual ao app. As notificações e a biometria existem só no app de celular.
 
 ## 8. Onde fica cada coisa
 
@@ -187,7 +202,7 @@ No site, o mapa aparece na versão aproximada. A previsão do tempo, o login e o
 
 ## 9. Como o código foi conferido
 
-- **Testes das regras:** os 18 passaram.
+- **Testes das regras:** os 19 passaram.
 - **Tipos (TypeScript):** sem erros, usando tipos simplificados dos pacotes. Rode `npm run typecheck` depois do `npm install` para conferir com os tipos oficiais.
 - **Telas:** desenhadas num navegador por um adaptador simples, para iPhone, Android e computador.
 - **Teste no aparelho:** um teste clicou o caminho completo sem nuvem e passou: criar conta, criar viagem, roteiro, gastos, adicionar pessoa, sair, errar a senha, entrar de novo e reabrir o app.

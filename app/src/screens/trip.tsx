@@ -628,6 +628,21 @@ export function TripScreen() {
   const dishTotal = dishCities.reduce((a, x) => a + DISHES[x].length, 0);
   const firstCity = legName(tripLegs(t)[0]);
   const hotelUrl = 'https://www.booking.com/searchresults.html?ss=' + encodeURIComponent(firstCity) + '&checkin=' + t.start + '&checkout=' + t.end + '&group_adults=' + t.travelers + (BOOKING_AFFILIATE_ID ? '&aid=' + BOOKING_AFFILIATE_ID : '');
+  /* viagens com várias paradas: datas, clima e hotel de cada cidade */
+  const legInfo = (() => {
+    let acc = 0;
+    const all = tripLegs(t);
+    return all.map((L, k) => {
+      const from = acc; acc += L.days;
+      const a = iso(addDays(parseD(t.start), from)), b = iso(addDays(parseD(t.start), from + L.days - 1));
+      const co = k < all.length - 1 ? iso(addDays(parseD(b), 1)) : t.end;
+      const cl = tripClimate({ destId: L.destId, start: a, end: b, styles: t.styles });
+      const url = 'https://www.booking.com/searchresults.html?ss=' + encodeURIComponent(legName(L)) + '&checkin=' + a + '&checkout=' + (co > a ? co : iso(addDays(parseD(a), 1))) + '&group_adults=' + t.travelers + (BOOKING_AFFILIATE_ID ? '&aid=' + BOOKING_AFFILIATE_ID : '');
+      return { L, a, b, co, cl, url };
+    });
+  })();
+  const multiLegs = legInfo.length > 1;
+  const legTips = multiLegs ? legInfo.reduce((acc: { icon: string; text: string }[], x) => acc.concat((x.cl ? x.cl.tips : []).filter((tp) => !acc.some((y) => y.text === tp.text))), []) : [];
   const NI = nextItem as { it: ItineraryItem; di: number } | null;
   const nip = NI ? PLACE_BY_ID[NI.it.placeId!] : null;
 
@@ -749,7 +764,27 @@ export function TripScreen() {
         ) : null}
 
         <Card style={{ marginTop: 14, overflow: 'hidden' }}>
-          {wc ? (
+          {multiLegs && legInfo.some((x) => x.cl) ? (
+            <>
+              <ListRow iconEl={<TileIcon name="cloudSun" />} title="Clima em cada parada" sub={legInfo.filter((x) => x.cl).map((x) => legName(x.L) + ' ' + x.cl!.hi + '°').join(' · ') + ' · o que levar'}
+                right={<Icon name={wxOpen ? 'chevU' : 'chevD'} color={c.faint} />} onPress={() => setWx(!wxOpen)} />
+              {wxOpen ? (
+                <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 10 }}>
+                  {legInfo.map((x, k) => (
+                    <Row key={k} gap={10}>
+                      <Icon name={x.cl ? x.cl.icon : 'cloudSun'} size={18} color={c.ink2} />
+                      <Grow><T v="small" style={{ fontWeight: '700' }}>{legName(x.L) + ' · ' + fmtShort(x.a) + (x.b !== x.a ? ' a ' + fmtShort(x.b) : '')}</T><T v="smallMuted">{x.cl ? x.cl.hi + '° / ' + x.cl.lo + '° · ' + x.cl.feel.toLowerCase() + ' · ' + x.cl.rainLabel : 'Sem dados de clima para este lugar'}</T></Grow>
+                    </Row>
+                  ))}
+                  {legTips.length ? <T v="kind" style={{ marginTop: 4 }}>O que levar</T> : null}
+                  {legTips.map((tp) => <Row key={tp.text} gap={10}><Icon name={tp.icon} size={18} color={c.ink2} /><Grow><T v="small">{tp.text}</T></Grow></Row>)}
+                  {legTips.length ? <Btn sm kind="secondary" disabled={!legTips.filter((x) => clItems.indexOf(x.text) < 0).length} label={legTips.filter((x) => clItems.indexOf(x.text) < 0).length ? 'Adicionar à lista de preparação' : 'Dicas já estão na sua lista de preparação'} onPress={() => A.addClimateTips(legTips.filter((x) => clItems.indexOf(x.text) < 0).map((x) => x.text))} /> : null}
+                  <T v="smallMuted">Média histórica de cada cidade no período em que vocês estarão lá.</T>
+                </View>
+              ) : null}
+              <Line />
+            </>
+          ) : wc ? (
             <>
               <ListRow iconEl={<TileIcon name={wc.icon} />} title={wc.hi + '° / ' + wc.lo + '° em ' + wc.monthsLabel + ' · ' + wc.feel} sub={wc.rainLabel + ' · o que levar'}
                 right={<Icon name={wxOpen ? 'chevU' : 'chevD'} color={c.faint} />} onPress={() => setWx(!wxOpen)} />
@@ -790,7 +825,12 @@ export function TripScreen() {
           ) : null}
           <ListRow iconEl={<TileIcon name="heart" />} title="Lugares salvos" sub={v.savedLabel + ' neste destino'} chevron onPress={() => A.go('saved')} />
           <Line />
-          <ListRow iconEl={<TileIcon name="bed" />} title={'Hotéis em ' + firstCity} sub={periodShort(t) + ' · ' + plural(t.travelers, 'adulto', 'adultos') + ' · link de parceiro'} chevron onPress={() => Linking.openURL(hotelUrl).catch(() => {})} />
+          {multiLegs ? legInfo.map((x, k) => (
+            <View key={'h' + k}>
+              {k ? <Line /> : null}
+              <ListRow iconEl={<TileIcon name="bed" />} title={'Hotéis em ' + legName(x.L)} sub={fmtShort(x.a) + ' a ' + fmtShort(x.co) + ' · ' + plural(t.travelers, 'adulto', 'adultos') + ' · link de parceiro'} chevron onPress={() => Linking.openURL(x.url).catch(() => {})} />
+            </View>
+          )) : <ListRow iconEl={<TileIcon name="bed" />} title={'Hotéis em ' + firstCity} sub={periodShort(t) + ' · ' + plural(t.travelers, 'adulto', 'adultos') + ' · link de parceiro'} chevron onPress={() => Linking.openURL(hotelUrl).catch(() => {})} />}
         </Card>
         <T v="smallMuted" center style={{ marginTop: 10 }}>Links de parceiros: o Destí pode receber comissão, sem custo a mais para você.</T>
         </View>} />

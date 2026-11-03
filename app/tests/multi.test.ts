@@ -37,3 +37,12 @@ test('deslocamento entre cidades: rotas conhecidas, estimativa e links', () => {
   const f = intercity('w:argentina:mendoza', 'santiago'); assert.equal(f.options.length, 0); assert.ok(f.compareUrl.indexOf('rome2rio.com/s/') > 0);
   const g = intercity('floripa', 'gramado'); assert.ok(g.options.some((o) => o.mode === 'onibus') && g.options.some((o) => o.mode === 'carro'));
 });
+
+import { makeBackup, parseBackup } from '../src/lib/backupCore';
+test('backup em arquivo: gera e confere', () => {
+  const data: any = { trips: [{ id: 'x', name: 'Paris' }], expenses: [], reservations: [], checklist: {}, saved: [], savedDest: [], chat: [], prefs: {}, sec: {}, dishDone: {}, alertsRead: [] };
+  const r: any = parseBackup(makeBackup(data));
+  assert.equal(r.data.trips[0].name, 'Paris');
+  assert.ok('error' in parseBackup('{"a":1}'));
+  assert.ok('error' in parseBackup('não é json'));
+});

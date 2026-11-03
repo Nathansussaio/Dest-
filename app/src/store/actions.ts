@@ -203,7 +203,7 @@ export function toggleDest(id: string) {
 }
 
 /* ---------- Editar e excluir viagem ---------- */
-export interface TripEdit { start: string; end: string; travelers: number; budget: string; styles: Style[]; pace: PaceId }
+export interface TripEdit { start: string; end: string; travelers: number; budget: string; styles: Style[]; pace: PaceId; stops?: { destId: string; name: string; days: number }[] }
 export function saveTripEdit(f: TripEdit): Record<string, string> {
   const e: Record<string, string> = {};
   if (!f.start) e.start = 'Escolha a data de ida.';
@@ -212,17 +212,40 @@ export function saveTripEdit(f: TripEdit): Record<string, string> {
   else if (countDays(f.start, f.end) > 60) e.end = 'Planeje viagens de até 60 dias.';
   if (!(Number(f.budget) > 0)) e.budget = 'Informe um orçamento maior que zero.';
   if (!f.styles.length) e.styles = 'Escolha pelo menos um estilo.';
+  if (f.stops && f.stops.length > 1 && f.start && f.end && f.end >= f.start) {
+    const extra = f.stops.slice(1).reduce((a, x) => a + x.days, 0);
+    if (countDays(f.start, f.end) - extra < 1) e.legs = 'A soma dos dias das paradas passa do total da viagem. Diminua os dias de alguma parada.';
+  }
   if (Object.keys(e).length) return e;
   const u = snap(), n = countDays(f.start, f.end), budget = Math.round(Number(f.budget) * 100) / 100;
+  let regenerated = 0;
   updateTrip((t) => {
-    const days = t.days.slice(0, n);
-    while (days.length < n) days.push([]);
     const changedBudget = budget !== t.budget;
-    return { ...t, start: f.start, end: f.end, travelers: f.travelers, budget, styles: f.styles.slice(), pace: f.pace, days,
-      legs: t.legs ? fitLegs(t.legs, n) : t.legs, plan: changedBudget ? splitBudget(budget) : t.plan };
+    const base = { ...t, start: f.start, end: f.end, travelers: f.travelers, budget, styles: f.styles.slice(), pace: f.pace, plan: changedBudget ? splitBudget(budget) : t.plan };
+    const oldLegs = tripLegs(t);
+    const stops = f.stops && f.stops.length ? f.stops : null;
+    const sameStops = !stops || (stops.length === oldLegs.length && stops.every((x, i) => x.destId === oldLegs[i].destId) && (stops.length === 1 || stops.slice(1).every((x, i) => x.days === oldLegs[i + 1].days)));
+    if (sameStops) {
+      const days = t.days.slice(0, n);
+      while (days.length < n) days.push([]);
+      return { ...base, days, legs: t.legs ? fitLegs(t.legs, n) : t.legs };
+    }
+    /* paradas mudaram: cada dia antigo volta para a mesma cidade, na ordem; os dias novos são montados */
+    const legs: Leg[] = stops!.map((x, i) => ({ destId: x.destId, name: x.name, days: i === 0 ? n - stops!.slice(1).reduce((a, y) => a + y.days, 0) : x.days }));
+    const queue: Record<string, ItineraryItem[][]> = {};
+    let g = 0;
+    oldLegs.forEach((L) => { for (let i = 0; i < L.days; i++, g++) { if (t.days[g] && t.days[g].length) (queue[L.destId] = queue[L.destId] || []).push(t.days[g].filter((x) => !(x.kind === 'note' && /^Viagem de /.test(x.text || '')))); } });
+    const keep: (ItineraryItem[] | null)[] = [];
+    legs.forEach((L) => { for (let i = 0; i < L.days; i++) { const q = queue[L.destId]; keep.push(q && q.length ? q.shift()! : null); } });
+    const multi = legs.length > 1;
+    const draft: Trip = { ...base, destId: legs[0].destId, name: multi ? legsTitle(legs) : legName(legs[0]), country: multi ? legsCountry(legs) : (() => { const d = lookupDest(legs[0].destId); return d ? (d.kind === 'country' ? 'País' : d.country) : t.country; })(), legs: multi ? legs : undefined, days: Array.from({ length: n }, () => []) };
+    const anyCatalog = legs.some((L) => hasCatalog(L.destId));
+    const plan = anyCatalog ? generateTripPlan(draft, draft.styles, keep) : null;
+    regenerated = anyCatalog ? keep.filter((x) => !x).length : 0;
+    return { ...draft, days: plan || keep.map((x) => x || []) };
   });
   setState((s) => ({ sheet: null, day: Math.min(s.day, n - 1) }));
-  showToast('Viagem atualizada', u);
+  showToast(regenerated ? 'Viagem atualizada: ' + plural(regenerated, 'dia novo montado', 'dias novos montados') : 'Viagem atualizada', u);
   return {};
 }
 export function deleteTrip() {
@@ -579,4 +602,23 @@ export async function toggleNotif(key: 'roteiro' | 'orcamento' | 'ia') {
     if (!ok) { showToast('Sem permissão, os avisos ficam só dentro do app'); }
   }
   flipNotif(key);
+}
+
+/* ---------- Backup em arquivo ---------- */
+export async function exportBackup() {
+  const { makeBackup, saveBackup } = await import('../lib/backup');
+  const n = S().trips.length;
+  const ok = await saveBackup(makeBackup(snap()));
+  showToast(ok ? 'Backup salvo: ' + plural(n, 'viagem', 'viagens') : 'Não foi possível salvar o backup');
+}
+export async function importBackup() {
+  const { pickBackup, parseBackup } = await import('../lib/backup');
+  const text = await pickBackup();
+  if (text == null) return;
+  const r = parseBackup(text);
+  if ('error' in r) { showToast(r.error); return; }
+  const u = snap();
+  const d = normalizeData(r.data);
+  setState({ ...d, screen: 'home', history: [], tripId: d.trips[0] ? d.trips[0].id : null } as any);
+  showToast('Backup restaurado: ' + plural(d.trips.length, 'viagem', 'viagens'), u);
 }
