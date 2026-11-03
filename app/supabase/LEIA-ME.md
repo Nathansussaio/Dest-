@@ -15,11 +15,18 @@ O plano grátis do Supabase atende bem o começo do app.
      - Assunto: `Código para criar uma senha nova no Destí`
      - Texto: `Use o código {{ .Token }} no app para criar sua senha nova. Se não foi você, ignore este e-mail.`
 5. **Configurar o envio de e-mails.** O envio padrão do Supabase é limitado a poucos e-mails por hora e serve só para testar. Antes de lançar, configure o envio próprio em **Authentication › Emails › SMTP Settings**. O Resend e o Brevo têm plano grátis.
-6. **Ligar o app ao projeto.** Em **Project Settings › API**, copie a **Project URL** e a chave **anon public**. Cole as duas no arquivo `.env` do app:
-   - a URL em `EXPO_PUBLIC_SUPABASE_URL`;
-   - a chave em `EXPO_PUBLIC_SUPABASE_ANON_KEY`.
+6. **Endereço do site.** Em **Authentication › URL Configuration**, coloque em **Site URL** o endereço do site (hoje `https://nathansussaio.github.io/Dest-/`; depois, `https://destiapp.com.br`).
+7. **Pegar as chaves.** Clique em **Connect** no topo do projeto, ou abra **Project Settings › API Keys**, e copie:
+   - a **Project URL** (algo como `https://abcdefgh.supabase.co`);
+   - a chave **publishable** (começa com `sb_publishable_`). Projetos antigos podem mostrar a chave **anon**, que também serve.
+8. **Ligar o site.** No GitHub, abra o repositório `Dest-` › **Settings › Secrets and variables › Actions › New repository secret** e crie dois segredos:
+   - `EXPO_PUBLIC_SUPABASE_URL` com a Project URL;
+   - `EXPO_PUBLIC_SUPABASE_ANON_KEY` com a chave publishable (ou anon).
 
-A chave `anon` pode ficar no app, porque quem protege os dados são as regras do `schema.sql`. Já a chave `service_role` **nunca** deve ir para o app.
+   Depois, em **Actions › Publicar o site › Run workflow**, gere o site de novo.
+9. **Ligar o app de celular.** Cole as mesmas duas chaves no arquivo `.env` do app (para testar no computador) e em expo.dev › seu projeto › Environment variables (para os builds das lojas).
+
+A chave publishable (ou `anon`) pode ficar no app, porque quem protege os dados são as regras do `schema.sql`. Já as chaves **secret** e `service_role` **nunca** devem ir para o app nem para o GitHub.
 
 ## Onde ficam as viagens
 
