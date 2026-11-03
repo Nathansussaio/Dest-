@@ -108,7 +108,7 @@ export async function flushCloud() {
   const u = state.user;
   if (!u || !u.id || u.method === 'guest' || state.syncState === 'ok' || pulledFor !== u.email) return;
   const data = state.vault[u.email], t = state.vaultTime[u.email] || Date.now();
-  if (!data) return;
+  if (!data) { state = { ...state, syncState: 'ok' }; listeners.forEach((l) => l()); return; }
   const ok = await cloudSave(u.id, data, t);
   if (state.user && state.user.email === u.email) {
     state = { ...state, syncState: ok ? 'ok' : 'offline' };
@@ -122,7 +122,7 @@ export async function pullCloud(): Promise<void> {
   if (!u || !u.id) return;
   const remote = await cloudLoad(u.id);
   if (!state.user || state.user.email !== u.email) return;
-  if (remote === undefined) return;
+  if (remote === undefined) { state = { ...state, syncState: 'offline' }; listeners.forEach((l) => l()); return; }
   pulledFor = u.email;
   const localT = state.vaultTime[u.email] || 0;
   if (remote && remote.updatedAt > localT) {

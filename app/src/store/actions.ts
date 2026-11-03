@@ -622,3 +622,15 @@ export async function importBackup() {
   setState({ ...d, screen: 'home', history: [], tripId: d.trips[0] ? d.trips[0].id : null } as any);
   showToast('Backup restaurado: ' + plural(d.trips.length, 'viagem', 'viagens'), u);
 }
+
+/* ---------- Nuvem: sincronizar agora (Perfil) ---------- */
+export async function syncNow() {
+  const { cloudLastError } = await import('../lib/backend');
+  const u = S().user;
+  if (!u || !u.id) { showToast('Esta conta guarda as viagens só neste aparelho'); return; }
+  setState({ syncState: 'pending' } as any);
+  await pullCloud();
+  if (S().syncState === 'pending') await flushCloud();
+  const st = S().syncState;
+  showToast(st === 'ok' ? 'Viagens sincronizadas com a sua conta' : 'Não foi possível sincronizar: ' + (cloudLastError() || 'sem conexão'));
+}

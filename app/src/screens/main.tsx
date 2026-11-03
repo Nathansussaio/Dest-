@@ -1,4 +1,5 @@
 /* Abas e telas gerais: Início, Viagens, Explorar, Salvos, Estilo, Avisos, Boas-vindas, Perfil */
+import { cloudLastError } from '../lib/backend';
 import React, { useState } from 'react';
 import { View, ScrollView, Pressable, Linking } from 'react-native';
 import { useApp, pickData, type State } from '../store/store';
@@ -413,6 +414,7 @@ export function Profile() {
 
       <GroupLabel>Backup</GroupLabel>
       <List>
+        {u.id ? <ListRow icon="refresh" title="Sincronizar com a conta agora" sub={s.syncState === 'offline' ? 'Última tentativa falhou: ' + (cloudLastError() || 'sem conexão') : s.syncState === 'pending' ? 'Enviando mudanças…' : 'Tudo salvo na sua conta'} chevron onPress={A.syncNow} /> : null}
         <ListRow icon="download" title="Baixar backup das viagens" sub="Um arquivo com viagens, gastos e reservas" chevron onPress={A.exportBackup} />
         <ListRow icon="refresh" title="Restaurar de um backup" sub="Substitui os dados deste aparelho (dá para desfazer)" chevron onPress={A.importBackup} />
       </List>
@@ -432,7 +434,7 @@ export function Profile() {
       <Gap h={18} />
       </>} />
       <Gap h={18} />
-      <T v="smallMuted" center>{'Destí 1.0 · ' + (guest ? 'modo visitante: nada é salvo' : u.id ? (s.syncState === 'offline' ? 'sem internet: as mudanças sobem quando a conexão voltar' : 'viagens guardadas na sua conta') : 'viagens guardadas neste aparelho')}</T>
+      <T v="smallMuted" center>{'Destí 1.0 · ' + (guest ? 'modo visitante: nada é salvo' : u.id ? (s.syncState === 'offline' ? 'não foi possível falar com a nuvem: ' + (cloudLastError() || 'sem conexão') : 'viagens guardadas na sua conta') : 'viagens guardadas neste aparelho')}</T>
     </Screen>
   );
 }

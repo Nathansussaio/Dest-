@@ -125,17 +125,22 @@ export async function cloudDeleteAccount(): Promise<Result<null>> {
 
 /* ---------- Backup das viagens ---------- */
 /* null = a pessoa ainda não tem nada na nuvem; undefined = não deu para ler agora (sem internet) */
+/* último erro da nuvem (para mostrar no Perfil e ajudar a configurar) */
+let lastError = '';
+export function cloudLastError(): string { return lastError; }
 export async function cloudLoad(userId: string): Promise<{ data: AccountData; updatedAt: number } | null | undefined> {
   try {
     const { data, error } = await sb().from('vaults').select('data, updated_at').eq('user_id', userId).maybeSingle();
-    if (error) return undefined;
+    if (error) { lastError = error.message || String(error); return undefined; }
+    lastError = '';
     if (!data) return null;
     return { data: data.data as AccountData, updatedAt: new Date(data.updated_at as string).getTime() };
-  } catch { return undefined; }
+  } catch (e: any) { lastError = (e && e.message) || 'sem conexão'; return undefined; }
 }
 export async function cloudSave(userId: string, payload: AccountData, updatedAt: number): Promise<boolean> {
   try {
     const { error } = await sb().from('vaults').upsert({ user_id: userId, data: payload, updated_at: new Date(updatedAt).toISOString() });
+    lastError = error ? error.message || String(error) : '';
     return !error;
-  } catch { return false; }
+  } catch (e: any) { lastError = (e && e.message) || 'sem conexão'; return false; }
 }
