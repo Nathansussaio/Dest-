@@ -45,7 +45,7 @@ export function Create() {
   const [end, setEnd] = useState('');
   const [travelers, setTrav] = useState(1);
   const [budget, setBudget] = useState('');
-  const [styles, setStyles] = useState<Style[]>(pre.styles && pre.styles.length ? pre.styles.slice(0, 2) : s.prefs.styles.slice(0, 2));
+  const [styles, setStyles] = useState<Style[]>(pre.styles && pre.styles.length ? pre.styles.slice(0, 2) : s.prefs.styles.length ? s.prefs.styles.slice(0, 2) : ['Cultural']);
   const [pace, setPace] = useState<PaceId>('equilibrado');
   const [legs, setLegs] = useState<Leg[]>([]);
   const [err, setErr] = useState<A.TripErrors>({});
