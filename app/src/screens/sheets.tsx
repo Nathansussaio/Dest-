@@ -1,0 +1,300 @@
+/* Folhas que sobem de baixo: gasto, editar viagem, pessoas, compartilhar, e-mail, senha, excluir, login social, reserva */
+import React, { useState } from 'react';
+import { View, ScrollView, Pressable, KeyboardAvoidingView, Image } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useApp } from '../store/store';
+import * as A from '../store/actions';
+import { T, Row, Grow, Gap, Btn, LinkBtn, IconBtn, Icon, Chip, Chips, Seg, Input, Field, DateField, DateRange, TimeStepper, Note, Avatar, Card, Divider, ListRow, Picklist } from '../ui';
+import { useTheme, useWide } from '../theme/useTheme';
+import { radius, isIOS } from '../theme/theme';
+import { BUDGET_CATS, CUR_SYMBOL, DEMO_RATES, STYLES, STYLE_INFO, PACES, RES_TYPES } from '../data';
+import type { Expense, Reservation, Style, PaceId } from '../types';
+import { tripCurrency, tripLegs, legName } from '../lib/trip';
+import { tripMembers, memberName } from '../lib/group';
+import { shareText, shareHtml } from '../lib/share';
+import { passRules } from '../lib/auth';
+import { copyText, shareTextNative, sharePdf } from '../lib/device';
+import { fmtMoney, money, maskToValue, plural, countDays, iso, addDays, parseD, norm, today0 } from '../lib/format';
+
+const TITLES: Record<string, string> = {
+  editTrip: 'Editar viagem', people: 'Pessoas da viagem', share: 'Compartilhar roteiro',
+  password: 'Alterar senha', delete: 'Excluir conta', resForm: 'Reserva'
+};
+
+export function SheetHost() {
+  const s = useApp();
+  const { c } = useTheme();
+  const ins = useSafeAreaInsets();
+  const wide = useWide();
+  if (!s.sheet) return null;
+  const arg = s.sheetArg;
+  const title = s.sheet === 'expense' ? (arg && arg.mode === 'edit' ? 'Editar gasto' : arg && arg.mode === 'scan' ? 'Gasto com nota' : 'Novo gasto')
+    : s.sheet === 'resForm' ? (arg && arg.id ? 'Editar reserva' : 'Nova reserva') : TITLES[s.sheet] || '';
+  return (
+    <View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, zIndex: 50 }}>
+      <Pressable accessibilityLabel="Fechar" onPress={A.closeSheet} style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: c.scrim }} />
+      <KeyboardAvoidingView behavior={isIOS ? 'padding' : undefined} style={wide ? { position: 'absolute', left: 0, right: 0, bottom: '6%', top: '6%', justifyContent: 'center' } : { position: 'absolute', left: 0, right: 0, bottom: 0, top: '8%', justifyContent: 'flex-end' }} pointerEvents="box-none">
+        <View accessibilityViewIsModal style={{ backgroundColor: c.bg, borderTopLeftRadius: radius.sheet, borderTopRightRadius: radius.sheet, borderBottomLeftRadius: wide ? radius.sheet : 0, borderBottomRightRadius: wide ? radius.sheet : 0, paddingBottom: ins.bottom + 12, maxWidth: 640, width: '100%', alignSelf: 'center', maxHeight: '100%', flexShrink: 1 }}>
+          <View style={{ alignItems: 'center', paddingTop: 8 }}><View style={{ width: 40, height: 5, borderRadius: 3, backgroundColor: c.line3 }} /></View>
+          <Row between style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 6 }}>
+            <T v="h2">{title}</T>
+            <IconBtn icon="x" flat size={40} label="Fechar" onPress={A.closeSheet} />
+          </Row>
+          <ScrollView keyboardShouldPersistTaps="handled" style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+            {s.sheet === 'expense' ? <ExpenseSheet key={JSON.stringify(arg && arg.exp ? arg.exp.id : arg)} arg={arg || {}} /> : null}
+            {s.sheet === 'editTrip' ? <EditTripSheet /> : null}
+            {s.sheet === 'people' ? <PeopleSheet /> : null}
+            {s.sheet === 'share' ? <ShareSheet /> : null}
+            {s.sheet === 'password' ? <PasswordSheet /> : null}
+            {s.sheet === 'delete' ? <DeleteSheet /> : null}
+            {s.sheet === 'resForm' ? <ResSheet arg={arg} /> : null}
+          </ScrollView>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+/* ---------- Gasto ---------- */
+function ExpenseSheet({ arg }: { arg: { mode?: 'manual' | 'scan' | 'edit'; exp?: Expense; receipt?: string | null } }) {
+  const s = useApp();
+  const { c } = useTheme();
+  const t = A.currentTrip()!;
+  const e = arg.exp;
+  const members = tripMembers(t), group = members.length > 1;
+  const cur0 = e && e.orig ? e.orig.currency : tripCurrency(t, s.day);
+  const [amount, setAmount] = useState(e ? String(e.orig ? e.orig.value : e.amount) : '');
+  const [currency, setCurrency] = useState<string>(cur0);
+  const [rate, setRate] = useState(e && e.orig ? String(e.orig.rate) : cur0 !== 'BRL' ? String(DEMO_RATES[cur0]).replace('.', ',') : '');
+  const [title, setTitle] = useState(e ? e.title : '');
+  const [cat, setCat] = useState(e ? e.cat : 'alimentacao');
+  const today = iso(today0());
+  const [date, setDate] = useState(e ? e.date || '' : today >= t.start && today <= t.end ? today : '');
+  const [method, setMethod] = useState(e ? e.method || 'Cartão' : 'Cartão');
+  const [receipt, setReceipt] = useState<string | null>(e ? e.receipt || null : arg.receipt || null);
+  const [paidBy, setPaidBy] = useState(e ? e.paidBy || 'me' : 'me');
+  const [split, setSplit] = useState<string[]>(e && e.split ? e.split : members.map((m) => m.id));
+  const [err, setErr] = useState<Record<string, string>>({});
+  const val = Number(amount), r = Number(String(rate).replace(',', '.'));
+  const brlV = currency === 'BRL' ? val : val * r;
+  const pickReceipt = async () => {
+    try {
+      const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.6 });
+      if (!res.canceled && res.assets && res.assets.length) setReceipt(res.assets[0].uri);
+    } catch { A.showToast('Não foi possível abrir as fotos'); }
+  };
+  const save = () => setErr(A.saveExpense({ id: e ? e.id : null, amount, currency, rate, title, cat, date, method, receipt, paidBy, split }));
+  return (
+    <View>
+      {arg.mode === 'scan' ? (
+        <Card flat style={{ padding: 12, marginBottom: 16, gap: 8 }}>
+          {receipt ? <Image source={{ uri: receipt }} style={{ width: '100%', height: 160, borderRadius: 10 }} resizeMode="cover" accessibilityLabel="Foto da nota" /> : null}
+          <T v="smallMuted">Confira a nota e digite o valor e a descrição abaixo. A foto fica guardada junto com o gasto.</T>
+        </Card>
+      ) : null}
+      <Field label="Valor" error={err.amount}>
+        <Seg value={currency} onChange={(v) => { setCurrency(v); if (v !== 'BRL' && !rate) setRate(String(DEMO_RATES[v]).replace('.', ',')); }} options={['BRL', 'EUR', 'USD'].map((k) => ({ id: k, label: CUR_SYMBOL[k] }))} />
+        <Gap h={8} />
+        <Input prefix={CUR_SYMBOL[currency]} value={amount ? fmtMoney(val) : ''} onChangeText={(v) => setAmount(maskToValue(v, 10))} keyboard="number-pad" placeholder="0,00" error={!!err.amount} />
+      </Field>
+      {currency !== 'BRL' ? (
+        <Field label={'Cotação: R$ por 1 ' + CUR_SYMBOL[currency]} error={err.rate}>
+          <Input value={rate} onChangeText={(v) => setRate(v.replace(/[^0-9.,]/g, ''))} keyboard="decimal-pad" placeholder="6,20" error={!!err.rate} />
+          {val > 0 && r > 0 ? <T v="smallMuted" style={{ marginTop: 6 }}>{'≈ ' + money(val * r) + ' no orçamento'}</T> : null}
+        </Field>
+      ) : null}
+      <Field label="Descrição" error={err.title}><Input value={title} onChangeText={setTitle} placeholder="Ex.: almoço, táxi, museu" error={!!err.title} /></Field>
+      <Field label="Categoria"><Chips>{BUDGET_CATS.map((k) => <Chip key={k.id} label={k.label} icon={k.icon} on={cat === k.id} onPress={() => setCat(k.id)} />)}</Chips></Field>
+      <Field label="Pagamento"><Seg value={method} onChange={setMethod} options={['Cartão', 'Dinheiro', 'Pix'].map((m) => ({ id: m, label: m }))} /></Field>
+      <DateField label="Data (opcional)" value={date} min={iso(addDays(parseD(t.start), -120))} max={t.end} onChange={setDate} />
+      {group ? (
+        <>
+          <Field label="Quem pagou"><Chips>{members.map((m) => <Chip key={m.id} label={m.id === 'me' ? 'Você' : m.name} on={paidBy === m.id} onPress={() => setPaidBy(m.id)} />)}</Chips></Field>
+          <Field label="Dividir entre" error={err.split}>
+            <Chips>{members.map((m) => <Chip key={m.id} label={m.id === 'me' ? 'Você' : m.name} on={split.indexOf(m.id) >= 0} onPress={() => setSplit(split.indexOf(m.id) >= 0 ? split.filter((x) => x !== m.id) : split.concat([m.id]))} />)}</Chips>
+            {split.length ? <T v="smallMuted" style={{ marginTop: 6 }}>{brlV > 0 ? money(brlV / split.length) + ' para cada ' + (split.length === 1 ? 'pessoa' : 'uma das ' + split.length + ' pessoas') : 'Dividido em partes iguais entre ' + plural(split.length, 'pessoa', 'pessoas')}</T> : null}
+          </Field>
+        </>
+      ) : null}
+      <Field label="Nota fiscal">
+        {receipt ? (
+          <Row>
+            <Image source={{ uri: receipt }} style={{ width: 56, height: 56, borderRadius: 10, backgroundColor: c.soft }} accessibilityLabel="Nota anexada" />
+            <Grow><T v="small">Nota anexada</T></Grow>
+            <Btn sm kind="ghost" label="Remover" onPress={() => setReceipt(null)} />
+          </Row>
+        ) : <Btn sm kind="secondary" icon="camera" label="Anexar foto da nota" onPress={pickReceipt} />}
+      </Field>
+      <Btn label={e ? 'Salvar alterações' : 'Registrar gasto'} block onPress={save} />
+      {e ? <><Gap h={8} /><Btn kind="ghost" label="Excluir gasto" color={c.errText} block onPress={() => A.removeExpense(e.id)} /></> : null}
+    </View>
+  );
+}
+
+/* ---------- Editar viagem ---------- */
+function EditTripSheet() {
+  const { c } = useTheme();
+  const t = A.currentTrip()!;
+  const [start, setStart] = useState(t.start);
+  const [end, setEnd] = useState(t.end);
+  const [travelers, setTrav] = useState(t.travelers);
+  const [budget, setBudget] = useState(String(t.budget));
+  const [styles, setStyles] = useState<Style[]>(t.styles.slice());
+  const [pace, setPace] = useState<PaceId>(t.pace || 'equilibrado');
+  const [err, setErr] = useState<Record<string, string>>({});
+  const [confirm, setConfirm] = useState(false);
+  const n = start && end && end >= start ? countDays(start, end) : null;
+  const cut = n && n < t.days.length && t.days.slice(n).some((d) => d.length);
+  const toggle = (st: Style) => setStyles(styles.indexOf(st) >= 0 ? styles.filter((x) => x !== st) : styles.length >= 2 ? [styles[1], st] : styles.concat([st]));
+  return (
+    <View>
+      <T v="muted" style={{ marginBottom: 14 }}>{t.name + (t.country ? ', ' + t.country : '')}</T>
+      <DateRange start={start} end={end} onStart={setStart} onEnd={setEnd} errStart={err.start} errEnd={err.end} />
+      {n ? <T v="smallMuted" style={{ marginBottom: 6 }}>{plural(n, 'dia', 'dias') + ' de viagem'}</T> : null}
+      {cut ? <Note kind="note" style={{ marginBottom: 10 }}>{'Com as novas datas, ' + (n! + 1 === t.days.length ? 'o Dia ' + t.days.length + ' sairá' : 'os dias ' + (n! + 1) + ' a ' + t.days.length + ' sairão') + ' do roteiro.'}</Note> : null}
+      <Gap h={8} />
+      <Field label="Viajantes">
+        <Row gap={14}>
+          <IconBtn icon="minus" label="Menos um viajante" onPress={() => setTrav(Math.max(1, travelers - 1))} />
+          <T v="lt">{plural(travelers, 'viajante', 'viajantes')}</T>
+          <IconBtn icon="plus" label="Mais um viajante" onPress={() => setTrav(Math.min(20, travelers + 1))} />
+        </Row>
+      </Field>
+      <Field label="Orçamento total" error={err.budget}><Input prefix="R$" value={budget ? fmtMoney(Number(budget)) : ''} onChangeText={(v) => setBudget(maskToValue(v))} keyboard="number-pad" error={!!err.budget} /></Field>
+      <Field label="Estilo" error={err.styles}><Picklist label="Estilo" placeholder="Escolha até 2 estilos" error={!!err.styles} options={STYLES.map((st) => ({ id: st, label: st, icon: STYLE_INFO[st].icon, hint: STYLE_INFO[st].short }))} value={styles} onToggle={(id) => toggle(id as any)} /></Field>
+      <Field label="Ritmo"><Seg value={pace} onChange={setPace} options={PACES.map((p) => ({ id: p.id, label: p.label }))} /></Field>
+      <Btn label="Salvar" block onPress={() => setErr(A.saveTripEdit({ start, end, travelers, budget, styles, pace }))} />
+      <Gap h={18} />
+      {confirm ? (
+        <Card flat style={{ padding: 14, gap: 10 }}>
+          <T v="lt">{'Excluir ' + t.name + '?'}</T>
+          <T v="smallMuted">Roteiro, gastos e reservas desta viagem serão apagados. Dá para desfazer logo depois.</T>
+          <Row gap={10}><Btn grow kind="secondary" label="Cancelar" onPress={() => setConfirm(false)} /><Btn grow kind="danger" label="Excluir" onPress={A.deleteTrip} /></Row>
+        </Card>
+      ) : <Btn kind="ghost" label="Excluir viagem" color={c.errText} block onPress={() => setConfirm(true)} />}
+    </View>
+  );
+}
+
+/* ---------- Pessoas da viagem ---------- */
+function PeopleSheet() {
+  const s = useApp();
+  const t = A.currentTrip()!;
+  const [name, setName] = useState('');
+  const [err, setErr] = useState<Record<string, string>>({});
+  const ms = tripMembers(t);
+  const label = (id: string) => (id === 'me' ? (s.user && s.user.name) || 'Você' : memberName(t, id));
+  const add = () => { const e = A.invite(name); setErr(e); if (!Object.keys(e).length) setName(''); };
+  return (
+    <View>
+      <T v="smallMuted" style={{ marginBottom: 12 }}>{t.name + ' · ' + plural(ms.length, 'pessoa', 'pessoas') + '. Adicione quem vai junto para dividir os gastos: gastos sem divisão definida são divididos entre todos.'}</T>
+      <Card style={{ overflow: 'hidden' }}>
+        {ms.map((m, i) => (
+          <View key={m.id}>
+            {i ? <Divider /> : null}
+            <ListRow iconEl={<Avatar size={38} letter={label(m.id).charAt(0).toUpperCase()} />} title={m.id === 'me' ? label('me') + ' (você)' : m.name}
+              sub={m.id === 'me' ? 'Organizador' : 'Participa da divisão dos gastos'}
+              right={m.id === 'me' ? undefined : <IconBtn icon="x" flat size={36} label={'Remover ' + m.name} onPress={() => A.removeMember(m.id)} />} />
+          </View>
+        ))}
+      </Card>
+      <T v="title" style={{ marginTop: 20, marginBottom: 10 }}>Adicionar pessoa</T>
+      <Field label="Nome" error={err.name}><Input value={name} onChangeText={setName} placeholder="Nome de quem vai junto" caps="words" error={!!err.name} onSubmit={add} /></Field>
+      <Btn label="Adicionar" icon="plus" block onPress={add} />
+      <Gap h={8} />
+      <Btn kind="ghost" icon="share" label="Mandar o roteiro para o grupo" block onPress={() => shareTextNative('Roteiro · ' + t.name, shareText(t, s.reservations))} />
+    </View>
+  );
+}
+
+/* ---------- Compartilhar ---------- */
+function ShareSheet() {
+  const s = useApp();
+  const { c } = useTheme();
+  const t = A.currentTrip()!;
+  const text = shareText(t, s.reservations);
+  return (
+    <View>
+      <Card flat style={{ overflow: 'hidden' }}>
+        <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }} contentContainerStyle={{ padding: 12 }}><T v="small" color={c.ink2}>{text}</T></ScrollView>
+      </Card>
+      <T v="smallMuted" style={{ marginTop: 8, marginBottom: 14 }}>Códigos de reserva e valores não entram no roteiro compartilhado.</T>
+      <Btn icon="share" label="Enviar (WhatsApp, e-mail…)" block onPress={() => shareTextNative('Roteiro · ' + t.name, text)} />
+      <Gap h={10} />
+      <Btn kind="secondary" icon="copy" label="Copiar texto" block onPress={async () => A.showToast((await copyText(text)) ? 'Roteiro copiado. Cole no WhatsApp, e-mail ou notas.' : 'Não foi possível copiar')} />
+      <Gap h={10} />
+      <Btn kind="secondary" icon="doc" label="Gerar PDF" block onPress={async () => { if (!(await sharePdf(shareHtml(t), 'Roteiro ' + t.name))) A.showToast('Não foi possível gerar o PDF'); }} />
+    </View>
+  );
+}
+
+/* ---------- Senha ---------- */
+function PasswordSheet() {
+  const { c } = useTheme();
+  const [cur, setCur] = useState('');
+  const [nw, setNw] = useState('');
+  const [nw2, setNw2] = useState('');
+  const [err, setErr] = useState<Record<string, string>>({});
+  return (
+    <View>
+      <Field label="Senha atual" error={err.cur}><Input value={cur} onChangeText={setCur} secure caps="none" autoComplete="password" error={!!err.cur} /></Field>
+      <Field label="Nova senha" error={err.nw}>
+        <Input value={nw} onChangeText={setNw} secure caps="none" autoComplete="new-password" error={!!err.nw} />
+        {nw ? <View style={{ marginTop: 8, gap: 3 }}>{passRules(nw).map((r) => <Row key={r.label} gap={6}><Icon name={r.ok ? 'check' : 'dot'} size={14} color={r.ok ? c.acc : c.muted2} /><T v="smallMuted">{r.label}</T></Row>)}</View> : null}
+      </Field>
+      <Field label="Confirme a nova senha" error={err.nw2}><Input value={nw2} onChangeText={setNw2} secure caps="none" autoComplete="new-password" error={!!err.nw2} /></Field>
+      {err.form ? <Note kind="err" style={{ marginBottom: 12 }}>{err.form}</Note> : null}
+      <Btn label="Alterar senha" block onPress={async () => setErr(await A.changePassword(cur, nw, nw2))} />
+    </View>
+  );
+}
+
+/* ---------- Excluir conta ---------- */
+function DeleteSheet() {
+  const s = useApp();
+  const [txt, setTxt] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const locked = txt.trim().toUpperCase() !== 'EXCLUIR' || busy;
+  const cloud = !!(s.user && s.user.id);
+  return (
+    <View>
+      <T v="muted">{cloud
+        ? 'Sua conta, suas viagens, gastos, reservas e preferências serão apagados da nuvem e deste aparelho. Isso não pode ser desfeito.'
+        : 'Suas viagens, gastos, reservas e preferências serão apagados deste aparelho. Isso não pode ser desfeito.'}</T>
+      <Gap h={14} />
+      {err ? <Note kind="err" style={{ marginBottom: 12 }}>{err}</Note> : null}
+      <Field label="Digite EXCLUIR para confirmar"><Input value={txt} onChangeText={setTxt} caps="characters" placeholder="EXCLUIR" /></Field>
+      <Btn kind="danger" label={busy ? 'Excluindo…' : 'Excluir minha conta'} block disabled={locked} onPress={async () => { setBusy(true); const e = await A.deleteAccount(); setBusy(false); setErr(e); }} />
+    </View>
+  );
+}
+
+/* ---------- Reserva ---------- */
+function ResSheet({ arg }: { arg: Partial<Reservation> & { imported?: boolean } | null }) {
+  const t = A.currentTrip()!;
+  const a = arg || {};
+  const [type, setType] = useState(a.type || 'hospedagem');
+  const [title, setTitle] = useState(a.title || '');
+  const [date, setDate] = useState(a.date || t.start);
+  const [time, setTime] = useState(a.time || '');
+  const [code, setCode] = useState(a.code || '');
+  const [err, setErr] = useState<Record<string, string>>({});
+  const legs = tripLegs(t);
+  return (
+    <View>
+      {a.imported && a.file ? <Note kind="info" style={{ marginBottom: 14 }}>{'Lido de ' + a.file.name + '. Confira os dados antes de salvar.'}</Note> : null}
+      <Field label="Tipo"><Chips>{RES_TYPES.map((r) => <Chip key={r.id} label={r.label} icon={r.icon} on={type === r.id} onPress={() => setType(r.id)} />)}</Chips></Field>
+      <Field label="Nome" error={err.title}><Input value={title} onChangeText={setTitle} placeholder={type === 'voo' ? 'Ex.: Voo GRU → LIS' : 'Ex.: Hotel em ' + legName(legs[0])} error={!!err.title} /></Field>
+      <DateField label="Data" value={date} min={iso(addDays(parseD(t.start), -1))} max={t.end} onChange={setDate} error={err.date} />
+      <Field label="Horário">
+        {time ? <Row gap={10}><TimeStepper label="Horário da reserva" value={time} onChange={setTime} /><LinkBtn label="Sem horário (dia todo)" onPress={() => setTime('')} /></Row>
+          : <View style={{ alignSelf: 'flex-start' }}><Btn sm kind="secondary" icon="plus" label="Definir horário" onPress={() => setTime('12:00')} /></View>}
+      </Field>
+      <Field label="Código de confirmação"><Input value={code} onChangeText={setCode} caps="characters" placeholder="Opcional" /></Field>
+      <T v="smallMuted" style={{ marginTop: -12, marginBottom: 16 }}>Com código, a reserva fica como confirmada.</T>
+      <Btn label="Salvar reserva" block onPress={() => setErr(A.saveRes({ id: a.id || null, type, title, date, time, code, file: a.file || null, imported: a.imported }))} />
+    </View>
+  );
+}

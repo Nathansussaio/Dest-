@@ -1,0 +1,63 @@
+# Gera o site oficial a partir do código em app/ (Expo) e publica no GitHub Pages.
+# Roda sozinho a cada mudança em app/. Também dá para rodar à mão em Actions > Publicar o site > Run workflow.
+# Configurações opcionais (Settings > Secrets and variables > Actions):
+#   Secrets:   EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, EXPO_PUBLIC_SENTRY_DSN
+#   Variables: SITE_URL (ex.: https://destiapp.com.br), EXPO_BASE_URL (/Dest- no GitHub Pages; vazio com domínio próprio),
+#              EXPO_PUBLIC_BOOKING_AFFILIATE_ID, EXPO_PUBLIC_GETYOURGUIDE_PARTNER_ID, EXPO_PUBLIC_SUPPORT_EMAIL
+name: Publicar o site
+on:
+  push:
+    branches: [main]
+    paths: ['app/**', '.github/workflows/site.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: site
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://nathansussaio.github.io/Dest-' }}
+      EXPO_BASE_URL: ${{ vars.SITE_URL && vars.EXPO_BASE_URL || (!vars.SITE_URL && '/Dest-' || '') }}
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+      EXPO_PUBLIC_BOOKING_AFFILIATE_ID: ${{ vars.EXPO_PUBLIC_BOOKING_AFFILIATE_ID }}
+      EXPO_PUBLIC_GETYOURGUIDE_PARTNER_ID: ${{ vars.EXPO_PUBLIC_GETYOURGUIDE_PARTNER_ID }}
+      EXPO_PUBLIC_SUPPORT_EMAIL: ${{ vars.EXPO_PUBLIC_SUPPORT_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Instalar os pacotes
+        working-directory: app
+        run: |
+          npm install --no-audit --no-fund --legacy-peer-deps
+          npx expo install @expo/metro-runtime -- --legacy-peer-deps
+      - name: Testes
+        working-directory: app
+        run: npx tsx --test tests/*.test.ts
+      - name: Gerar o site
+        working-directory: app
+        run: |
+          export EXPO_PUBLIC_SITE_URL="$SITE_URL"
+          echo "Endereço: $SITE_URL · caminho: '${EXPO_BASE_URL}'"
+          npx expo export --platform web --output-dir dist
+          cp dist/index.html dist/404.html
+          touch dist/.nojekyll
+          find dist -maxdepth 1 -type f \( -name '*.html' -o -name '*.xml' -o -name '*.txt' \) -exec sed -i "s#%SITE_URL%#${SITE_URL}#g" {} +
+          ls -la dist
+      - name: Publicar
+        run: |
+          shopt -s extglob dotglob
+          rm -rf !(app|.git|.github|README.md|CNAME)
+          cp -r app/dist/. .
+          rm -rf app/dist
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Site gerado a partir de ${GITHUB_SHA::7}" || exit 0
+          git push

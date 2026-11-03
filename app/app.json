@@ -1,0 +1,72 @@
+{
+  "expo": {
+    "name": "Destí",
+    "slug": "desti",
+    "scheme": "desti",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0B6670"
+    },
+    "ios": {
+      "bundleIdentifier": "app.desti",
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "A câmera é usada para fotografar notas fiscais dos seus gastos.",
+        "NSPhotoLibraryUsageDescription": "As fotos são usadas para anexar notas fiscais aos gastos.",
+        "NSFaceIDUsageDescription": "O Face ID protege suas reservas e documentos ao abrir o app."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.desti",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0B6670"
+      },
+      "permissions": [
+        "CAMERA",
+        "USE_BIOMETRIC",
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./public/favicon.png",
+      "name": "Destí",
+      "shortName": "Destí",
+      "description": "Roteiro dia a dia, orçamento, divisão de gastos e reservas num só lugar.",
+      "lang": "pt-BR",
+      "themeColor": "#0B6670",
+      "backgroundColor": "#F4F4F1"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "As fotos são usadas para anexar notas fiscais aos gastos.",
+          "cameraPermission": "A câmera é usada para fotografar notas fiscais dos seus gastos."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "O Face ID protege suas reservas e documentos ao abrir o app."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#0B6670"
+        }
+      ]
+    ]
+  }
+}
