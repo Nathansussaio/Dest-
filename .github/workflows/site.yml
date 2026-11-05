@@ -59,7 +59,7 @@ jobs:
           npx playwright install --with-deps chromium firefox webkit
           BASE_PATH="${EXPO_BASE_URL:-}"
           mkdir -p /tmp/site$BASE_PATH && cp -r dist/. /tmp/site$BASE_PATH/
-          (cd /tmp/site && python3 -m http.server 4173 >/dev/null 2>&1 &)
+          (node tests-e2e/serve.mjs /tmp/site 4173 &)
           sleep 2
           node tests-e2e/smoke.mjs "http://127.0.0.1:4173$BASE_PATH/"
       - name: Publicar
