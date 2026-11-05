@@ -4,13 +4,15 @@ import { chromium, firefox, webkit } from 'playwright';
 const base = process.argv[2];
 const MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const nx = (new Date().getMonth() + 1) % 12;
+/* falhas de serviços de fora (cotação, clima, mapa) não são erro do site: o app usa a reserva ou segue sem eles */
+const externo = (m) => /access control checks|Failed to fetch|NetworkError|Load failed|awesomeapi|frankfurter|open-meteo|cartocdn/i.test(m);
 let falhas = 0;
 for (const [nome, tipo] of [['Chromium', chromium], ['Firefox', firefox], ['WebKit (Safari)', webkit]]) {
   for (const [w, h] of [[1366, 900], [390, 844]]) {
     const b = await tipo.launch();
     const p = await b.newPage({ viewport: { width: w, height: h } });
     const erros = [];
-    p.on('pageerror', (e) => erros.push(e.message));
+    p.on('pageerror', (e) => { if (!externo(e.message)) erros.push(e.message); });
     const passo = async (t, fn) => {
       try { await fn(); } catch (e) { falhas++; console.log('FALHOU [' + nome + ' ' + w + 'px] ' + t + ': ' + String(e.message).split('\n')[0]); throw e; }
     };
@@ -32,7 +34,7 @@ for (const [nome, tipo] of [['Chromium', chromium], ['Firefox', firefox], ['WebK
       await passo('abrir link direto numa aba nova', async () => {
         const u = p.url();
         const p2 = await b.newPage({ viewport: { width: w, height: h } });
-        const e2 = []; p2.on('pageerror', (e) => e2.push(e.message));
+        const e2 = []; p2.on('pageerror', (e) => { if (!externo(e.message)) e2.push(e.message); });
         await p2.goto(u);
         await p2.getByText('Planeje viagens sem planilha.').first().waitFor({ timeout: 20000 });
         if (e2.length) throw new Error('erros: ' + e2.slice(0, 2).join(' | '));
