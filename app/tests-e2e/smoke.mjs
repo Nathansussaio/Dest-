@@ -27,8 +27,17 @@ for (const [nome, tipo] of [['Chromium', chromium], ['Firefox', firefox], ['WebK
       });
       await passo('abrir o roteiro', async () => { await p.getByText('Usar este roteiro').first().click(); await p.waitForURL(/\/roteiro\/1$/, { timeout: 8000 }); });
       await passo('botão Voltar do navegador', async () => { await p.goBack(); await p.waitForTimeout(800); if (!/\/viagem\//.test(p.url())) throw new Error('Voltar saiu da viagem: ' + p.url()); });
-      /* abre o mesmo endereço de novo (no WebKit de Linux, o reload() do teste derruba o navegador de teste; abrir o endereço testa o mesmo) */
-      await passo('abrir o endereço de novo mantém a tela', async () => { const u = p.url(); await p.goto(u); await p.waitForTimeout(2500); if (p.url() !== u) throw new Error('mudou para ' + p.url()); if (!(await p.getByLabel('Mapa', { exact: false }).count()) && !(await p.getByText('Roteiro', { exact: false }).count()) && !(await p.getByText('Dia 1', { exact: false }).count())) throw new Error('tela vazia'); });
+      /* link direto aberto numa aba nova (como quem recebe o link): a página tem que abrir sem erro.
+         No modo visitante nada é salvo, então a viagem não existe na aba nova e o app volta para o começo. */
+      await passo('abrir link direto numa aba nova', async () => {
+        const u = p.url();
+        const p2 = await b.newPage({ viewport: { width: w, height: h } });
+        const e2 = []; p2.on('pageerror', (e) => e2.push(e.message));
+        await p2.goto(u);
+        await p2.getByText('Planeje viagens sem planilha.').first().waitFor({ timeout: 20000 });
+        if (e2.length) throw new Error('erros: ' + e2.slice(0, 2).join(' | '));
+        await p2.close();
+      });
       if (erros.length) { falhas++; console.log('FALHOU [' + nome + ' ' + w + 'px] erros na página: ' + erros.slice(0, 3).join(' | ')); }
       else console.log('ok [' + nome + ' ' + w + 'px]');
     } catch { /* já contado */ }
