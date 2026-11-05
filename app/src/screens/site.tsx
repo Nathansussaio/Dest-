@@ -170,7 +170,6 @@ export function Landing() {
         <Band>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: narrow ? 28 : 48, flexWrap: 'wrap' }}>
             <View style={{ flex: 1, minWidth: narrow ? 0 : 340, flexBasis: narrow ? '100%' : 340, gap: narrow ? 14 : 18 }}>
-              <T v="kind">App de viagem grátis · iPhone, Android e navegador</T>
               <Text style={{ fontSize: narrow ? 36 : 52, lineHeight: narrow ? 41 : 58, fontWeight: '800', letterSpacing: narrow ? -1 : -1.5, color: c.ink }}>Planeje viagens sem planilha.</Text>
               <T v="muted" style={{ fontSize: narrow ? 17 : 19, lineHeight: narrow ? 25 : 28 }}>Roteiro dia a dia no seu estilo, orçamento, divisão de gastos, reservas e o clima do destino. Tudo num só lugar.</T>
               <Row gap={12} style={{ flexWrap: 'wrap', marginTop: 8 }}>
@@ -237,7 +236,6 @@ export function Landing() {
         <Band>
           <Card style={{ padding: narrow ? 24 : 36, alignItems: 'center', gap: 14, backgroundColor: c.accBg }}>
             <Text style={{ fontSize: narrow ? 26 : 34, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', letterSpacing: -0.8 }}>Sua próxima viagem começa aqui.</Text>
-            <Text style={{ fontSize: 17, color: 'rgba(255,255,255,0.88)', textAlign: 'center' }}>Grátis, sem anúncios. Suas viagens ficam salvas na sua conta.</Text>
             <Btn kind="sso" label="Criar conta grátis" onPress={() => setState({ auth: 'signup' })} />
           </Card>
         </Band>
