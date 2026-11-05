@@ -378,7 +378,7 @@ export function Profile() {
       {guest ? (
         <Card style={{ padding: 16, marginTop: 14, gap: 8, backgroundColor: c.accTint }}>
           <T v="lt">Guarde suas viagens</T>
-          <T v="small">Crie uma conta grátis: o que você montou agora vem junto.</T>
+          <T v="small">Crie uma conta: o que você montou agora vem junto.</T>
           <Btn sm label="Criar conta" onPress={A.guestToSignup} />
         </Card>
       ) : null}

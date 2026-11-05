@@ -126,7 +126,7 @@ export function SiteHeader() {
         <Grow />
         <FxInline />
         {s.auth !== 'login' ? <LinkBtn label="Entrar" onPress={() => auth('login')} /> : null}
-        {s.auth !== 'signup' ? <Btn sm label={narrow ? 'Criar conta' : 'Criar conta grátis'} onPress={() => auth('signup')} /> : null}
+        {s.auth !== 'signup' ? <Btn sm label="Criar conta" onPress={() => auth('signup')} /> : null}
       </View>
       <FxStrip />
     </View>
@@ -173,7 +173,7 @@ export function Landing() {
               <Text style={{ fontSize: narrow ? 36 : 52, lineHeight: narrow ? 41 : 58, fontWeight: '800', letterSpacing: narrow ? -1 : -1.5, color: c.ink }}>Planeje viagens sem planilha.</Text>
               <T v="muted" style={{ fontSize: narrow ? 17 : 19, lineHeight: narrow ? 25 : 28 }}>Roteiro dia a dia no seu estilo, orçamento, divisão de gastos, reservas e o clima do destino. Tudo num só lugar.</T>
               <Row gap={12} style={{ flexWrap: 'wrap', marginTop: 8 }}>
-                <Btn label="Criar conta grátis" onPress={() => setState({ auth: 'signup' })} />
+                <Btn label="Criar conta" onPress={() => setState({ auth: 'signup' })} />
                 <Btn kind="secondary" label="Experimentar sem conta" onPress={A.tryAsGuest} />
               </Row>
               <T v="smallMuted">Já tem conta? <Text style={{ color: c.acc, fontWeight: '700' }} onPress={() => setState({ auth: 'login' })}>Entrar</Text></T>
@@ -236,7 +236,7 @@ export function Landing() {
         <Band>
           <Card style={{ padding: narrow ? 24 : 36, alignItems: 'center', gap: 14, backgroundColor: c.accBg }}>
             <Text style={{ fontSize: narrow ? 26 : 34, fontWeight: '800', color: '#FFFFFF', textAlign: 'center', letterSpacing: -0.8 }}>Sua próxima viagem começa aqui.</Text>
-            <Btn kind="sso" label="Criar conta grátis" onPress={() => setState({ auth: 'signup' })} />
+            <Btn kind="sso" label="Criar conta" onPress={() => setState({ auth: 'signup' })} />
           </Card>
         </Band>
         <SiteFooter />
