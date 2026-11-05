@@ -1,3 +1,5 @@
+/* limite geral: se travar, encerra com erro em 8 minutos */
+setTimeout(() => { console.log('FALHOU: os testes de tela passaram de 8 minutos.'); process.exit(1); }, 8 * 60 * 1000).unref();
 /* Teste de tela no site oficial, antes de publicar (roda no GitHub em Chromium, Firefox e Safari/WebKit).
    Uso: node tests-e2e/smoke.mjs http://127.0.0.1:4173/Dest-/   — sai com erro se algo falhar. */
 import { chromium, firefox, webkit } from 'playwright';
@@ -11,9 +13,11 @@ for (const [nome, tipo] of [['Chromium', chromium], ['Firefox', firefox], ['WebK
   for (const [w, h] of [[1366, 900], [390, 844]]) {
     const b = await tipo.launch();
     const p = await b.newPage({ viewport: { width: w, height: h } });
+    p.setDefaultTimeout(15000); p.setDefaultNavigationTimeout(30000);
     const erros = [];
     p.on('pageerror', (e) => { if (!externo(e.message)) erros.push(e.message); });
     const passo = async (t, fn) => {
+      console.log('… [' + nome + ' ' + w + 'px] ' + t);
       try { await fn(); } catch (e) { falhas++; console.log('FALHOU [' + nome + ' ' + w + 'px] ' + t + ': ' + String(e.message).split('\n')[0]); throw e; }
     };
     try {
@@ -43,7 +47,7 @@ for (const [nome, tipo] of [['Chromium', chromium], ['Firefox', firefox], ['WebK
       if (erros.length) { falhas++; console.log('FALHOU [' + nome + ' ' + w + 'px] erros na página: ' + erros.slice(0, 3).join(' | ')); }
       else console.log('ok [' + nome + ' ' + w + 'px]');
     } catch { /* já contado */ }
-    await b.close();
+    await Promise.race([b.close(), new Promise((r) => setTimeout(r, 10000))]);
   }
 }
 if (falhas) { console.log(falhas + ' falha(s): o site NÃO foi publicado.'); process.exit(1); }
