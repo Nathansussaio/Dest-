@@ -28,15 +28,16 @@ jobs:
       EXPO_PUBLIC_GETYOURGUIDE_PARTNER_ID: ${{ vars.EXPO_PUBLIC_GETYOURGUIDE_PARTNER_ID }}
       EXPO_PUBLIC_SUPPORT_EMAIL: ${{ vars.EXPO_PUBLIC_SUPPORT_EMAIL }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - name: Instalar os pacotes
         working-directory: app
         run: |
           npm install --no-audit --no-fund --legacy-peer-deps
           npx expo install @expo/metro-runtime -- --legacy-peer-deps
+          npx expo install --fix -- --legacy-peer-deps || echo 'aviso: não foi possível alinhar todas as versões'
       - name: Testes
         working-directory: app
         run: npx tsx --test tests/*.test.ts
@@ -48,8 +49,19 @@ jobs:
           npx expo export --platform web --output-dir dist
           cp dist/index.html dist/404.html
           touch dist/.nojekyll
-          find dist -maxdepth 1 -type f \( -name '*.html' -o -name '*.xml' -o -name '*.txt' \) -exec sed -i "s#%SITE_URL%#${SITE_URL}#g" {} +
+          find dist -maxdepth 1 -type f \( -name '*.html' -o -name '*.xml' -o -name '*.txt' -o -name 'sw.js' \) -exec sed -i "s#%SITE_URL%#${SITE_URL}#g" {} +
+          sed -i "s#%BUILD%#${GITHUB_SHA::12}#g" dist/sw.js
           ls -la dist
+      - name: Testes de tela no site gerado (Chromium, Firefox e Safari)
+        working-directory: app
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.56.0
+          npx playwright install --with-deps chromium firefox webkit
+          BASE_PATH="${EXPO_BASE_URL:-}"
+          mkdir -p /tmp/site$BASE_PATH && cp -r dist/. /tmp/site$BASE_PATH/
+          (cd /tmp/site && python3 -m http.server 4173 >/dev/null 2>&1 &)
+          sleep 2
+          node tests-e2e/smoke.mjs "http://127.0.0.1:4173$BASE_PATH/"
       - name: Publicar
         run: |
           shopt -s extglob dotglob

@@ -1,4 +1,5 @@
 /* Raiz do app: carrega os dados do aparelho, escolhe entre entrada e app, abas, folhas e avisos */
+import { initRouter } from './src/lib/router';
 import React, { useEffect, useState } from 'react';
 import { View, Text, Pressable, BackHandler, AppState, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -56,6 +57,9 @@ function Root() {
       if (st.user && st.user.method !== 'guest' && st.sec.faceId) setLocked(true);
     });
   }, []);
+
+  /* 2b. no site: cada tela tem endereço, e o Voltar do navegador volta uma tela */
+  useEffect(() => initRouter(), []);
 
   /* 2. botão voltar do Android segue o histórico do app */
   useEffect(() => {

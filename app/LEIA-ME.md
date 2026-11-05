@@ -74,6 +74,10 @@ O arquivo `.env` nunca vai para o GitHub nem para as lojas: ele já está no `.g
   - **editar as paradas** de uma viagem já criada, em Editar viagem: trocar, incluir, tirar e reordenar cidades e mudar os dias. Os dias já montados continuam na mesma cidade, e os dias novos são montados automaticamente;
   - na página da viagem, **clima e hotéis de cada parada**, com as datas de cada cidade;
   - o roteiro automático inclui o dia de deslocamento entre as cidades, e a página da viagem mostra as paradas com as datas de cada uma.
+- **Endereços e botão Voltar no site:** cada tela tem o próprio endereço (por exemplo `/viagem/<id>/roteiro/2` ou `/lugar/<id>`). O Voltar e o Avançar do navegador seguem as telas, recarregar mantém a tela e dá para abrir um link direto. O título da aba muda com a tela.
+- **Site mais leve e offline:** o site não carrega mais as bibliotecas que só servem no celular, e o mapa só é baixado quando abre. Um service worker (`public/sw.js`) guarda o site no aparelho, então ele abre mesmo sem internet.
+- **Google e acessibilidade:** a página já chega com o texto de apresentação em HTML, os títulos são marcados como títulos e o foco do teclado aparece em verde-azulado.
+- **Publicação mais segura:** antes de publicar, o GitHub testa o site gerado no Chromium, no Firefox e no Safari (WebKit), no computador e no celular. Se algum teste falhar, o site antigo continua no ar. Outra tarefa (`supabase-ativo.yml`) faz uma consulta leve no banco a cada 3 dias, para o Supabase grátis não pausar.
 - **Orçamento opcional:** ao criar ou editar uma viagem, o orçamento pode ficar em branco. Sem ele, a tela de gastos mostra só o total gasto, com a opção "Definir orçamento".
 - **Arrastar atividades entre dias:** no roteiro, segure no ⠿ de uma atividade e solte em cima de outro dia, na faixa de dias do topo. Em Editar dia, continua existindo o botão de mover para outro dia.
 - **Backup em arquivo:** em Perfil › Backup, dá para baixar um arquivo com todas as viagens, gastos e reservas e restaurar depois, neste ou em outro aparelho. Isso funciona mesmo sem a nuvem.

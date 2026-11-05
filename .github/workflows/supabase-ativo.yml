@@ -1,0 +1,22 @@
+# Mantém o banco do Supabase (plano grátis) acordado: o plano grátis pausa o projeto depois de 7 dias sem uso.
+# Faz uma consulta leve a cada 3 dias. Usa os mesmos segredos do site; sem eles, não faz nada.
+name: Manter o Supabase ativo
+on:
+  schedule:
+    - cron: '17 11 */3 * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Consulta leve no banco
+        env:
+          URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then echo "Supabase não configurado: nada a fazer."; exit 0; fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/rest/v1/vaults?select=user_id&limit=1" -H "apikey: $KEY")
+          echo "Resposta do Supabase: $code"
+          [ "$code" = "200" ]

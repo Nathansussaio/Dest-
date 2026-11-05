@@ -65,7 +65,10 @@ export function T({ v = 'body', color, style, children, lines, center }: { v?: V
     kind: { fontSize: fs(12), fontWeight: '700', color: c.accText, letterSpacing: 0.5, textTransform: 'uppercase' },
     label: { fontSize: fs(14), fontWeight: '600', color: c.ink, marginBottom: 8 }
   };
-  return <Text numberOfLines={lines} style={[base[v], color ? { color } : null, center ? { textAlign: 'center' } : null, style]}>{children}</Text>;
+  /* títulos marcados como títulos: leitores de tela e o Google entendem a estrutura da página */
+  const level = v === 'h1' || v === 'big' ? 1 : v === 'h2' ? 2 : v === 'title' ? 3 : 0;
+  const a11y: any = level ? { accessibilityRole: 'header', role: 'heading', 'aria-level': level } : null;
+  return <Text {...a11y} numberOfLines={lines} style={[base[v], color ? { color } : null, center ? { textAlign: 'center' } : null, style]}>{children}</Text>;
 }
 
 /* ---------- Estrutura ---------- */

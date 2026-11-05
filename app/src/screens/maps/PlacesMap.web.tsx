@@ -2,7 +2,6 @@
    Marcadores numerados na ordem do roteiro. Sem coordenadas ou se o mapa não carregar, mostra o mapa aproximado. */
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { T } from '../../ui';
 import { useTheme } from '../../theme/useTheme';
@@ -19,13 +18,20 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
   const box = useRef<any>(null);
   const map = useRef<any>(null);
   const layer = useRef<any>(null);
-  const [failed, setFailed] = useState(!L || typeof (L as any).map !== 'function');
+  /* o Leaflet só é baixado quando o mapa abre (deixa o site mais leve) */
+  const [L, setLeaflet] = useState<any>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    import('leaflet').then((m: any) => { const lib = m && (m.default || m); if (!alive) return; if (lib && typeof lib.map === 'function') setLeaflet(lib); else setFailed(true); }).catch(() => alive && setFailed(true));
+    return () => { alive = false; };
+  }, []);
   const pts = items.filter((x) => x.p.lat != null && x.p.lng != null);
   const sig = pts.map((x) => x.key).join(',');
 
   /* cria o mapa uma vez */
   useEffect(() => {
-    if (failed || !box.current || map.current || !pts.length) return;
+    if (failed || !L || !box.current || map.current || !pts.length) return;
     try {
       map.current = (L as any).map(box.current, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
       (L as any).tileLayer(isDark ? TILES_DARK : TILES_LIGHT, { attribution: ATTRIB, subdomains: 'abcd', maxZoom: 19 }).addTo(map.current);
@@ -34,7 +40,7 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
       setFailed(true);
     }
     return () => { if (map.current) { map.current.remove(); map.current = null; layer.current = null; } };
-  }, [failed, pts.length > 0, isDark]);
+  }, [failed, L, pts.length > 0, isDark]);
 
   /* marcadores e enquadramento */
   useEffect(() => {
