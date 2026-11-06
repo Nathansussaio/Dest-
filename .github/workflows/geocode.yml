@@ -1,0 +1,16 @@
+# Busca no OpenStreetMap a localização dos lugares do catálogo que ainda não têm coordenadas (rodar à mão).
+name: Localizar lugares no mapa
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  geocode:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with: { node-version: 22 }
+      - run: node app/tools/geocode.mjs
+      - uses: actions/upload-artifact@v4
+        with: { name: geocode, path: app/tools/geocode-out.json }
