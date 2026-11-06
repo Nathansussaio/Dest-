@@ -55,15 +55,16 @@ jobs:
           ls -la dist
       - name: Testes de tela no site gerado (Chromium, Firefox e Safari)
         working-directory: app
-        timeout-minutes: 30
+        timeout-minutes: 20
         run: |
-          npm install --no-save --no-audit --no-fund playwright@1.56.0
-          npx playwright install --with-deps chromium firefox webkit
+          # imagem oficial do Playwright: já vem com os 3 navegadores e as bibliotecas (sem baixar pacotes do Ubuntu)
           BASE_PATH="${EXPO_BASE_URL:-}"
           mkdir -p /tmp/site$BASE_PATH && cp -r dist/. /tmp/site$BASE_PATH/
-          (node tests-e2e/serve.mjs /tmp/site 4173 &)
-          sleep 2
-          node tests-e2e/smoke.mjs "http://127.0.0.1:4173$BASE_PATH/"
+          docker run --rm --ipc=host --network host -v "$PWD:/w" -v /tmp/site:/tmp/site -w /w mcr.microsoft.com/playwright:v1.56.0-noble bash -c "
+            npm install --no-save --no-audit --no-fund --legacy-peer-deps playwright@1.56.0 > /dev/null &&
+            (node tests-e2e/serve.mjs /tmp/site 4173 &) && sleep 2 &&
+            node tests-e2e/smoke.mjs http://127.0.0.1:4173$BASE_PATH/"
+          sudo chown -R "$(id -u):$(id -g)" . || true
       - name: Publicar
         run: |
           shopt -s extglob dotglob
