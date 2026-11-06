@@ -1,5 +1,5 @@
 /* Folhas que sobem de baixo: gasto, editar viagem, pessoas, compartilhar, e-mail, senha, excluir, login social, reserva */
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScrollView, Pressable, KeyboardAvoidingView, Image } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import { shareText, shareHtml } from '../lib/share';
 import { passRules } from '../lib/auth';
 import { copyText, shareTextNative, sharePdf } from '../lib/device';
 import { SITE_URL, CLOUD_ENABLED } from '../config';
+import { useFx } from '../lib/fx';
 import { fmtMoney, money, maskToValue, plural, countDays, iso, addDays, parseD, norm, today0 } from '../lib/format';
 
 const TITLES: Record<string, string> = {
@@ -68,7 +69,15 @@ function ExpenseSheet({ arg }: { arg: { mode?: 'manual' | 'scan' | 'edit'; exp?:
   const cur0 = e && e.orig ? e.orig.currency : tripCurrency(t, s.day);
   const [amount, setAmount] = useState(e ? String(e.orig ? e.orig.value : e.amount) : '');
   const [currency, setCurrency] = useState<string>(cur0);
-  const [rate, setRate] = useState(e && e.orig ? String(e.orig.rate) : cur0 !== 'BRL' ? String(DEMO_RATES[cur0]).replace('.', ',') : '');
+  /* cotação do dia (a mesma do topo do site); sem internet, a última guardada; sem nenhuma, um valor de referência */
+  const fx = useFx();
+  const liveRate = (code: string) => { const x = fx && fx.rates.find((q) => q.code === code); return x ? x.brl : null; };
+  const fmtRateBr = (v: number) => v.toFixed(2).replace('.', ',');
+  const rateFor = (code: string) => fmtRateBr(liveRate(code) || DEMO_RATES[code] || 0);
+  const [rate, setRate] = useState(e && e.orig ? String(e.orig.rate).replace('.', ',') : cur0 !== 'BRL' ? rateFor(cur0) : '');
+  /* a pessoa digitou a cotação (ou é um gasto já salvo): não troca sozinha */
+  const [rateTouched, setRateTouched] = useState(!!(e && e.orig));
+  useEffect(() => { if (!rateTouched && currency !== 'BRL' && liveRate(currency)) setRate(rateFor(currency)); }, [fx, currency]);
   const [title, setTitle] = useState(e ? e.title : '');
   const [cat, setCat] = useState(e ? e.cat : 'alimentacao');
   const today = iso(today0());
@@ -96,14 +105,27 @@ function ExpenseSheet({ arg }: { arg: { mode?: 'manual' | 'scan' | 'edit'; exp?:
         </Card>
       ) : null}
       <Field label="Valor" error={err.amount}>
-        <Seg value={currency} onChange={(v) => { setCurrency(v); if (v !== 'BRL' && !rate) setRate(String(DEMO_RATES[v]).replace('.', ',')); }} options={['BRL', 'EUR', 'USD'].map((k) => ({ id: k, label: CUR_SYMBOL[k] }))} />
+        <Seg value={currency} onChange={(v) => { setCurrency(v); if (v !== 'BRL' && (!rateTouched || !rate)) { setRate(rateFor(v)); setRateTouched(false); } }} options={['BRL', 'EUR', 'USD'].map((k) => ({ id: k, label: CUR_SYMBOL[k] }))} />
         <Gap h={8} />
         <Input prefix={CUR_SYMBOL[currency]} value={amount ? fmtMoney(val) : ''} onChangeText={(v) => setAmount(maskToValue(v, 10))} keyboard="number-pad" placeholder="0,00" error={!!err.amount} />
       </Field>
       {currency !== 'BRL' ? (
         <Field label={'Cotação: R$ por 1 ' + CUR_SYMBOL[currency]} error={err.rate}>
-          <Input value={rate} onChangeText={(v) => setRate(v.replace(/[^0-9.,]/g, ''))} keyboard="decimal-pad" placeholder="6,20" error={!!err.rate} />
+          <Input value={rate} onChangeText={(v) => { setRateTouched(true); setRate(v.replace(/[^0-9.,]/g, '')); }} keyboard="decimal-pad" placeholder="6,20" error={!!err.rate} />
           {val > 0 && r > 0 ? <T v="smallMuted" style={{ marginTop: 6 }}>{'≈ ' + money(val * r) + ' no orçamento'}</T> : null}
+          {(() => {
+            const lv = liveRate(currency);
+            if (!lv) return <T v="smallMuted" style={{ marginTop: 4 }}>Não deu para buscar a cotação de hoje. Confira o valor (o banco ou o cartão mostram a cotação usada).</T>;
+            const when = new Date(fx!.at);
+            const hh = String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0');
+            const same = Math.abs(lv - r) < 0.005;
+            return (
+              <Row gap={8} style={{ marginTop: 4, flexWrap: 'wrap' }}>
+                <T v="smallMuted">{'Cotação de hoje: R$ ' + fmtRateBr(lv) + ' (' + (fx!.source === 'awesomeapi' ? 'atualizada às ' + hh : 'Banco Central Europeu') + ')'}</T>
+                {!same ? <LinkBtn label="Usar a de hoje" onPress={() => { setRate(fmtRateBr(lv)); setRateTouched(false); }} /> : null}
+              </Row>
+            );
+          })()}
         </Field>
       ) : null}
       <Field label="Descrição" error={err.title}><Input value={title} onChangeText={setTitle} placeholder="Ex.: almoço, táxi, museu" error={!!err.title} /></Field>
