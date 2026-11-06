@@ -7,7 +7,7 @@ const base = process.argv[2];
 const MES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
 const nx = (new Date().getMonth() + 1) % 12;
 /* falhas de serviços de fora (cotação, clima, mapa) não são erro do site: o app usa a reserva ou segue sem eles */
-const externo = (m) => /access control checks|Failed to fetch|NetworkError|Load failed|awesomeapi|frankfurter|open-meteo|cartocdn/i.test(m);
+const externo = (m) => /access control checks|Failed to fetch|NetworkError|Load failed|awesomeapi|frankfurter|open-meteo|cartocdn|openstreetmap/i.test(m);
 let falhas = 0;
 for (const [nome, tipo] of [['Chromium', chromium], ['Firefox', firefox], ['WebKit (Safari)', webkit]]) {
   for (const [w, h] of [[1366, 900], [390, 844]]) {

@@ -1,4 +1,4 @@
-/* Mapa real no site: Leaflet com o mapa do OpenStreetMap (desenho da CARTO), grátis.
+/* Mapa real no site: Leaflet com o mapa oficial do OpenStreetMap (sem chave).
    Marcadores numerados na ordem do roteiro. Sem coordenadas ou se o mapa não carregar, mostra o mapa aproximado. */
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
@@ -9,9 +9,17 @@ import { plural } from '../../lib/format';
 import { SchematicMap } from './SchematicMap';
 import type { MapItem } from './types';
 
-const TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-const TILES_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-const ATTRIB = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>';
+/* a CARTO passou a exigir chave paga; o mapa do OpenStreetMap é livre (com crédito) para uso moderado */
+const TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+const ATTRIB = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>';
+/* modo escuro: escurece o desenho do mapa sem mexer nos marcadores */
+function darkCss() {
+  if (typeof document === 'undefined' || document.getElementById('desti-map-dark')) return;
+  const st = document.createElement('style');
+  st.id = 'desti-map-dark';
+  st.textContent = '.desti-map-dark .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.7)}';
+  document.head.appendChild(st);
+}
 
 export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; sel: string | null; onSelect: (k: string) => void; color: string }) {
   const { c, isDark } = useTheme();
@@ -34,7 +42,8 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
     if (failed || !L || !box.current || map.current || !pts.length) return;
     try {
       map.current = (L as any).map(box.current, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
-      (L as any).tileLayer(isDark ? TILES_DARK : TILES_LIGHT, { attribution: ATTRIB, subdomains: 'abcd', maxZoom: 19 }).addTo(map.current);
+      darkCss();
+      (L as any).tileLayer(TILES, { attribution: ATTRIB, maxZoom: 19 }).addTo(map.current);
       layer.current = (L as any).layerGroup().addTo(map.current);
     } catch {
       setFailed(true);
@@ -67,7 +76,7 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
   return (
     <View>
       <View style={{ height: 420, borderRadius: 20, overflow: 'hidden', backgroundColor: c.soft }}>
-        {React.createElement('div', { ref: box, style: { width: '100%', height: '100%' }, role: 'region', 'aria-label': 'Mapa com ' + plural(pts.length, 'lugar', 'lugares') + ' do roteiro' })}
+        {React.createElement('div', { ref: box, style: { width: '100%', height: '100%' }, className: isDark ? 'desti-map-dark' : undefined, role: 'region', 'aria-label': 'Mapa com ' + plural(pts.length, 'lugar', 'lugares') + ' do roteiro' })}
       </View>
       {missing > 0 ? <T v="smallMuted" style={{ marginTop: 6 }}>{plural(missing, 'lugar ainda sem localização exata ficou', 'lugares ainda sem localização exata ficaram') + ' fora do mapa; veja na lista abaixo.'}</T> : null}
     </View>
