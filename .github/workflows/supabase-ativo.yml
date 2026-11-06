@@ -20,3 +20,20 @@ jobs:
           code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/rest/v1/vaults?select=user_id&limit=1" -H "apikey: $KEY")
           echo "Resposta do Supabase: $code"
           [ "$code" = "200" ]
+      - name: Conferir as tabelas da viagem em grupo
+        env:
+          URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          if [ -z "$URL" ] || [ -z "$KEY" ]; then exit 0; fi
+          for t in shared_trips trip_members trip_invites; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$URL/rest/v1/$t?select=*&limit=1" -H "apikey: $KEY")
+            echo "$t: $code"
+            [ "$code" = "200" ] || { echo "::warning::Tabela $t não encontrada: rode supabase/schema-grupo.sql"; }
+          done
+          # sem conta, a função join_trip tem que recusar (401/403/400), nunca dizer que não existe (404)
+          code=$(curl -s -o /tmp/r.txt -w '%{http_code}' -X POST "$URL/rest/v1/rpc/join_trip" -H "apikey: $KEY" -H "Content-Type: application/json" -d '{"invite":"TESTE","member_name":"teste"}')
+          echo "join_trip: $code $(head -c 200 /tmp/r.txt)"
+          # sem conta, ninguém lê viagens de grupo
+          body=$(curl -s "$URL/rest/v1/shared_trips?select=id" -H "apikey: $KEY")
+          echo "viagens visíveis sem conta: $body"
