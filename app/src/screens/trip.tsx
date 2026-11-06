@@ -748,19 +748,21 @@ export function TripScreen() {
         {fc ? (
           <>
             <Section title="Previsão do tempo" />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: pad, gap: 8 }}>
-              {Object.keys(fc).sort().map((d) => {
+            {React.createElement(siteWide ? View : ScrollView, (siteWide
+              /* site largo: os dias quebram em linhas dentro da coluna (sem faixa lateral difícil de rolar com o mouse) */
+              ? { style: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 } }
+              : { horizontal: true, showsHorizontalScrollIndicator: false, style: { marginHorizontal: -pad }, contentContainerStyle: { paddingHorizontal: pad, gap: 8 } }) as any,
+              Object.keys(fc).sort().map((d) => {
                 const f = fc[d], dt = parseD(d), di = diffDays(parseD(t.start), dt);
                 return (
-                  <Card key={d} style={{ width: 92, padding: 10, alignItems: 'center', gap: 4 }} label={'Dia ' + (di + 1) + ': ' + f.label + ', máxima ' + f.hi + ' e mínima ' + f.lo + ' graus' + (f.rain != null ? ', ' + f.rain + '% de chance de chuva' : '')}>
+                  <Card key={d} style={{ width: siteWide ? 84 : 92, flexGrow: siteWide ? 1 : 0, padding: 10, alignItems: 'center', gap: 4 }} label={'Dia ' + (di + 1) + ': ' + f.label + ', máxima ' + f.hi + ' e mínima ' + f.lo + ' graus' + (f.rain != null ? ', ' + f.rain + '% de chance de chuva' : '')}>
                     <T v="smallMuted">{SEM[dt.getDay()] + ' ' + dt.getDate()}</T>
                     <Icon name={f.icon} size={26} color={c.acc} />
                     <T v="lt" style={{ fontSize: 15 }}>{f.hi + '° / ' + f.lo + '°'}</T>
                     <T v="smallMuted">{f.rain != null ? f.rain + '% chuva' : f.label}</T>
                   </Card>
                 );
-              })}
-            </ScrollView>
+              }))}
             <T v="smallMuted" style={{ marginTop: 6 }}>Previsão Open-Meteo, atualizada a cada poucas horas.</T>
           </>
         ) : null}
@@ -1055,7 +1057,7 @@ export function Itinerary() {
     <Screen>
       <TopBar title={'Roteiro · ' + t.name} onBack={A.back} right={<IconBtn icon="map" label="Mapa" onPress={() => A.go('map')} />} />
       <Cols main={<>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: pad, gap: 8 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={siteWide ? undefined : { marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: siteWide ? 0 : pad, gap: 8 }}>
         {t.days.map((d, i) => {
           const dt = addDays(start, i), on = i === dayIdx;
           return (

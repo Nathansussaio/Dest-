@@ -139,7 +139,9 @@ export function Chip({ label, on, onPress, icon }: { label: string; on?: boolean
 }
 export function Chips({ children, scroll }: { children: Children; scroll?: boolean }) {
   const pad = usePad();
-  if (scroll) return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: pad, gap: 8, paddingVertical: 2 }}>{children}</ScrollView>;
+  /* no celular a faixa vai até a borda da tela; no site largo fica dentro da coluna (senão invade a coluna ao lado) */
+  const wide = useSiteWide();
+  if (scroll) return <ScrollView horizontal showsHorizontalScrollIndicator={false} style={wide ? undefined : { marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: wide ? 0 : pad, gap: 8, paddingVertical: 2 }}>{children}</ScrollView>;
   return <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{children}</View>;
 }
 /* Lista de seleção (picklist): campo que abre a lista de opções; aceita várias até "max". */

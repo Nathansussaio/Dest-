@@ -98,7 +98,7 @@ export function Home() {
       {siteWide ? <Cols main={top} side={side} /> : top}
       <Section title="Inspiração" action="Explorar" onAction={() => A.tab('explore')} />
       {site ? <Grid fullRows items={FEATURED} min={narrow ? 150 : 200} render={(id, w) => <DestCard d={DEST_BY_ID[id]} s={s} width={w} onPlan={() => planDest(id)} />} /> : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: pad, gap: 12 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={siteWide ? undefined : { marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: siteWide ? 0 : pad, gap: 12 }}>
           {FEATURED.slice(0, 8).map((id) => <DestCard key={id} d={DEST_BY_ID[id]} s={s} width={150} onPlan={() => planDest(id)} />)}
         </ScrollView>
       )}
@@ -163,7 +163,7 @@ export function Explore() {
         <>
           <Section title={xq ? 'Destinos' : 'Destinos em alta'} />
           {site ? <Grid fullRows={!xq} items={dests} min={narrow ? 150 : 190} render={(d, w) => <DestCard d={d} s={s} width={w} onPlan={() => planDest(d.id)} />} /> : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: pad, gap: 12 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={siteWide ? undefined : { marginHorizontal: -pad }} contentContainerStyle={{ paddingHorizontal: siteWide ? 0 : pad, gap: 12 }}>
               {dests.map((d) => <DestCard key={d.id} d={d} s={s} width={150} onPlan={() => planDest(d.id)} />)}
             </ScrollView>
           )}
