@@ -3,7 +3,7 @@
    - Arquivos do app (_expo/static, com nome único a cada publicação): guardados na primeira vez e servidos do cache.
    - Outros arquivos do site (ícones, páginas legais): mostra o guardado e atualiza por trás.
    - Nada de outros endereços (Supabase, mapa, clima, cotação) passa pelo cache. */
-const VERSION = '649826fd38a4';
+const VERSION = '9e5e00dd020d';
 const CACHE = 'desti-' + VERSION;
 const BASE = new URL(self.registration.scope).pathname;
 const SHELL = [BASE, BASE + 'manifest.json', BASE + 'favicon.png', BASE + 'icon-192.png', BASE + 'icon-512.png'];
