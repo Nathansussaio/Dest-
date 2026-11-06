@@ -22,7 +22,7 @@ function tile(req) {
     }).catch(() => hit || Response.error());
   }));
 }
-const VERSION = '95f115caeb9d';
+const VERSION = '6abdf1cf9714';
 const CACHE = 'desti-' + VERSION;
 const BASE = new URL(self.registration.scope).pathname;
 const SHELL = [BASE, BASE + 'manifest.json', BASE + 'favicon.png', BASE + 'icon-192.png', BASE + 'icon-512.png'];
@@ -40,7 +40,8 @@ self.addEventListener('fetch', (e) => {
   if (url.hostname === 'tile.openstreetmap.org' && req.mode === 'cors') { e.respondWith(tile(req)); return; }
   if (url.origin !== self.location.origin || url.pathname.indexOf(BASE) !== 0) return;
   if (req.mode === 'navigate') {
-    e.respondWith(fetch(req).then((res) => {
+    /* sempre confere com o servidor se há versão nova (sem usar a cópia de até 10 minutos do navegador) */
+    e.respondWith(fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' }).then((res) => {
       if (res && res.ok) { const copy = res.clone(); caches.open(CACHE).then((c) => c.put(BASE, copy)); }
       return res;
     }).catch(() => caches.match(BASE).then((r) => r || caches.match(req))));
