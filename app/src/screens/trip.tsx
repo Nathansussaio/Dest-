@@ -616,9 +616,9 @@ export function TripScreen() {
   t.days.some((d, di) => sortItems(d).some((it) => (it.kind === 'place' && it.placeId && PLACE_BY_ID[it.placeId] ? ((nextItem = { it, di }), true) : false)));
   const members = tripMembers(t), debts = settleUp(groupBalances(t, s.expenses));
   const mine = debts.filter((d) => d.from === 'me' || d.to === 'me');
-  const peopleSub = members.length < 2 ? 'Convide quem vai junto para planejar e dividir os gastos'
+  const peopleSub = (t.shared ? 'Editando junto · ' : '') + (members.length < 2 ? (t.shared ? 'mande o convite para o grupo' : 'Convide quem vai junto para editar a viagem e dividir os gastos')
     : mine.length ? mine.map((d) => (d.from === 'me' ? 'Você deve ' + money(d.amount) + ' para ' + memberName(t, d.to) : cap(memberName(t, d.from)) + ' te deve ' + money(d.amount))).join(' · ')
-    : debts.length ? 'Há acertos pendentes entre o grupo' : 'Gastos divididos e contas em dia';
+    : debts.length ? 'Há acertos pendentes entre o grupo' : 'Gastos divididos e contas em dia');
   const wc = v.wc;
   const clItems = (s.checklist[t.id] || []).map((x) => x.label);
   const wxMissing = wc ? wc.tips.filter((tp) => clItems.indexOf(tp.text) < 0) : [];

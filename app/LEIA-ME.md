@@ -82,7 +82,8 @@ O arquivo `.env` nunca vai para o GitHub nem para as lojas: ele já está no `.g
 - **Arrastar atividades entre dias:** no roteiro, segure no ⠿ de uma atividade e solte em cima de outro dia, na faixa de dias do topo. Em Editar dia, continua existindo o botão de mover para outro dia.
 - **Backup em arquivo:** em Perfil › Backup, dá para baixar um arquivo com todas as viagens, gastos e reservas e restaurar depois, neste ou em outro aparelho. Isso funciona mesmo sem a nuvem.
 - **Previsão do tempo real:** nos 16 dias antes da viagem, aparece a previsão de cada dia na página da viagem e no topo de cada dia do roteiro. Antes disso, aparece o clima típico do mês.
-- **Pessoas da viagem:** quem vai junto entra pelo nome, para dividir os gastos neste celular. Mandar o roteiro para o grupo continua funcionando.
+- **Viagem em grupo sincronizada:** em Pessoas da viagem › Convidar para editar junto, o app cria um código e um link de convite. Cada pessoa entra com a própria conta, no próprio celular, e todo mundo edita o mesmo roteiro, gastos, reservas e checklist; as mudanças chegam em segundos. Precisa rodar uma vez o `supabase/schema-grupo.sql` (veja `supabase/LEIA-ME.md`).
+- **Pessoas da viagem:** quem não usa o app entra só pelo nome, para dividir os gastos. Mandar o roteiro para o grupo continua funcionando.
 - **Páginas e documentos:**
   - Política de privacidade e Termos de uso, com links no app;
   - "Fale com a gente";
@@ -92,7 +93,6 @@ O arquivo `.env` nunca vai para o GitHub nem para as lojas: ele já está no `.g
 **Fica para depois:**
 - assistente com IA;
 - leitura automática da nota fiscal;
-- grupo sincronizado entre celulares;
 - entrar com Google e Apple.
 
 O "Assistente" atual monta as sugestões com o catálogo de lugares, sem IA, e o app diz isso para a pessoa.

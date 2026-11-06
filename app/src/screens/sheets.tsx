@@ -15,11 +15,12 @@ import { tripMembers, memberName } from '../lib/group';
 import { shareText, shareHtml } from '../lib/share';
 import { passRules } from '../lib/auth';
 import { copyText, shareTextNative, sharePdf } from '../lib/device';
+import { SITE_URL, CLOUD_ENABLED } from '../config';
 import { fmtMoney, money, maskToValue, plural, countDays, iso, addDays, parseD, norm, today0 } from '../lib/format';
 
 const TITLES: Record<string, string> = {
   editTrip: 'Editar viagem', people: 'Pessoas da viagem', share: 'Compartilhar roteiro',
-  password: 'Alterar senha', delete: 'Excluir conta', resForm: 'Reserva'
+  password: 'Alterar senha', delete: 'Excluir conta', resForm: 'Reserva', join: 'Entrar numa viagem'
 };
 
 export function SheetHost() {
@@ -49,6 +50,7 @@ export function SheetHost() {
             {s.sheet === 'password' ? <PasswordSheet /> : null}
             {s.sheet === 'delete' ? <DeleteSheet /> : null}
             {s.sheet === 'resForm' ? <ResSheet arg={arg} /> : null}
+            {s.sheet === 'join' ? <JoinSheet arg={arg} /> : null}
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -237,22 +239,95 @@ function PeopleSheet() {
   const add = () => { const e = A.invite(name); setErr(e); if (!Object.keys(e).length) setName(''); };
   return (
     <View>
-      <T v="smallMuted" style={{ marginBottom: 12 }}>{t.name + ' · ' + plural(ms.length, 'pessoa', 'pessoas') + '. Adicione quem vai junto para dividir os gastos: gastos sem divisão definida são divididos entre todos.'}</T>
+      <GroupBox />
+      <T v="title" style={{ marginTop: 20, marginBottom: 6 }}>Quem vai</T>
+      <T v="smallMuted" style={{ marginBottom: 12 }}>{t.name + ' · ' + plural(ms.length, 'pessoa', 'pessoas') + '. Gastos sem divisão definida são divididos entre todos.'}</T>
       <Card style={{ overflow: 'hidden' }}>
         {ms.map((m, i) => (
           <View key={m.id}>
             {i ? <Divider /> : null}
             <ListRow iconEl={<Avatar size={38} letter={label(m.id).charAt(0).toUpperCase()} />} title={m.id === 'me' ? label('me') + ' (você)' : m.name}
-              sub={m.id === 'me' ? 'Organizador' : 'Participa da divisão dos gastos'}
-              right={m.id === 'me' ? undefined : <IconBtn icon="x" flat size={36} label={'Remover ' + m.name} onPress={() => A.removeMember(m.id)} />} />
+              sub={m.status === 'owner' ? (t.shared ? 'Criou a viagem · edita pelo próprio celular' : 'Organizador') : m.id === 'me' || /^u:/.test(m.id) ? 'Edita a viagem pelo próprio celular' : 'Participa da divisão dos gastos'}
+              right={m.id === 'me' || (/^u:/.test(m.id) && !(t.shared && s.user && t.shared.owner === s.user.id)) ? undefined : <IconBtn icon="x" flat size={36} label={'Remover ' + m.name} onPress={() => A.removeMember(m.id)} />} />
           </View>
         ))}
       </Card>
-      <T v="title" style={{ marginTop: 20, marginBottom: 10 }}>Adicionar pessoa</T>
+      <T v="title" style={{ marginTop: 20, marginBottom: 6 }}>Adicionar só pelo nome</T>
+      <T v="smallMuted" style={{ marginBottom: 10 }}>Para quem não vai usar o app: entra na divisão dos gastos, mas não edita a viagem.</T>
       <Field label="Nome" error={err.name}><Input value={name} onChangeText={setName} placeholder="Nome de quem vai junto" caps="words" error={!!err.name} onSubmit={add} /></Field>
       <Btn label="Adicionar" icon="plus" block onPress={add} />
       <Gap h={8} />
       <Btn kind="ghost" icon="share" label="Mandar o roteiro para o grupo" block onPress={() => shareTextNative('Roteiro · ' + t.name, shareText(t, s.reservations))} />
+    </View>
+  );
+}
+
+/* ---------- Editar junto: cada pessoa no seu celular ---------- */
+function inviteLink(code: string) { return SITE_URL.replace(/\/+$/, '') + '/convite/' + code; }
+function inviteText(name: string, code: string) {
+  return 'Vamos montar juntos a viagem ' + name + ' no Destí! Abra o link e entre com a sua conta: ' + inviteLink(code) + '\nOu, no app, toque em Viagens › Entrar com código e digite ' + code + '.';
+}
+function GroupBox() {
+  const s = useApp();
+  const { c } = useTheme();
+  const t = A.currentTrip()!;
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [sure, setSure] = useState(false);
+  const run = async (f: () => Promise<string | null>) => { setBusy(true); setErr(''); const e = await f(); setBusy(false); if (e) setErr(e); };
+  const owner = !!(t.shared && s.user && t.shared.owner === s.user.id);
+  if (!CLOUD_ENABLED || !A.canEditTogether()) {
+    return (
+      <Card flat style={{ padding: 14, gap: 6 }}>
+        <Row gap={8}><Icon name="users" size={18} color={c.acc} /><T v="lt">Editar junto, cada um no seu celular</T></Row>
+        <T v="smallMuted">{CLOUD_ENABLED ? 'Entre com uma conta para convidar outras pessoas: todo mundo vê e edita o mesmo roteiro, gastos e reservas.' : 'Disponível quando o app estiver ligado à nuvem.'}</T>
+      </Card>
+    );
+  }
+  if (!t.shared) {
+    return (
+      <Card flat style={{ padding: 14, gap: 8 }}>
+        <Row gap={8}><Icon name="users" size={18} color={c.acc} /><T v="lt">Editar junto, cada um no seu celular</T></Row>
+        <T v="smallMuted">Convide quem vai com você. Cada pessoa entra com a própria conta e todo mundo vê e edita o mesmo roteiro, gastos, reservas e checklist. As mudanças aparecem para todos em segundos.</T>
+        {err ? <Note kind="err">{err}</Note> : null}
+        <Btn icon="users" label={busy ? 'Criando convite…' : 'Convidar para editar junto'} block onPress={() => !busy && run(A.shareTripLive)} />
+      </Card>
+    );
+  }
+  const code = t.shared.code;
+  return (
+    <Card flat style={{ padding: 14, gap: 8 }}>
+      <Row gap={8}><Icon name="users" size={18} color={c.acc} /><T v="lt">Viagem em grupo</T><Grow /><T v="smallMuted" color={c.acc}>{s.syncState === 'offline' ? 'sem conexão' : 'sincronizada'}</T></Row>
+      <T v="smallMuted">Todo mundo do grupo edita esta viagem pelo próprio celular. As mudanças aparecem para todos em segundos.</T>
+      {code ? (
+        <>
+          <T v="smallMuted" style={{ marginTop: 4 }}>Código do convite</T>
+          <T v="h2" style={{ letterSpacing: 4 }}>{code}</T>
+          <Btn icon="share" label="Enviar convite" block onPress={() => shareTextNative('Convite · ' + t.name, inviteText(t.name, code))} />
+          <Btn kind="secondary" icon="copy" label="Copiar link do convite" block onPress={async () => A.showToast((await copyText(inviteLink(code))) ? 'Link copiado' : 'Não foi possível copiar')} />
+        </>
+      ) : <Btn icon="share" label={busy ? 'Criando convite…' : 'Criar código de convite'} block onPress={() => !busy && run(A.newInviteCode)} />}
+      {err ? <Note kind="err">{err}</Note> : null}
+      <Btn kind="ghost" icon="refresh" label="Atualizar agora" block onPress={A.syncGroupNow} />
+      {sure ? (
+        <Card style={{ padding: 12, gap: 8 }}>
+          <T v="smallMuted">{owner ? 'Ninguém mais vai conseguir editar. Quem participava fica com uma cópia da viagem como está agora.' : 'A viagem sai deste aparelho e você deixa de ver as mudanças do grupo. Dá para voltar com um novo convite.'}</T>
+          <Row gap={10}><Btn grow kind="secondary" label="Cancelar" onPress={() => setSure(false)} /><Btn grow kind="danger" label={owner ? 'Encerrar grupo' : 'Sair'} onPress={() => run(A.leaveGroup)} /></Row>
+        </Card>
+      ) : <Btn kind="ghost" label={owner ? 'Encerrar o grupo' : 'Sair desta viagem em grupo'} color={c.errText} block onPress={() => setSure(true)} />}
+    </Card>
+  );
+}
+function JoinSheet({ arg }: { arg: any }) {
+  const [code, setCode] = useState(typeof arg === 'string' ? arg : '');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const go = async () => { if (busy) return; setBusy(true); const e = await A.joinByCode(code); setBusy(false); setErr(e || ''); };
+  return (
+    <View>
+      <T v="smallMuted" style={{ marginBottom: 12 }}>Recebeu um convite? Digite o código (ou cole o link) para entrar na viagem e editar junto com o grupo.</T>
+      <Field label="Código do convite" error={err}><Input value={code} onChangeText={setCode} placeholder="Ex.: K7M2QX9P" caps="characters" error={!!err} onSubmit={go} /></Field>
+      <Btn label={busy ? 'Entrando…' : 'Entrar na viagem'} block onPress={go} />
     </View>
   );
 }

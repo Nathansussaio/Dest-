@@ -28,6 +28,20 @@ O plano grátis do Supabase atende bem o começo do app.
 
 A chave publishable (ou `anon`) pode ficar no app, porque quem protege os dados são as regras do `schema.sql`. Já as chaves **secret** e `service_role` **nunca** devem ir para o app nem para o GitHub.
 
+## Viagem em grupo (editar junto, cada um no seu celular)
+
+Para ligar, rode uma vez o arquivo `schema-grupo.sql` em **SQL Editor › New query › Run** (quem já rodou o `schema.sql` antigo só precisa deste). Ele cria:
+
+- `shared_trips`: uma linha por viagem compartilhada, com roteiro, gastos, reservas e checklist;
+- `trip_members`: quem participa de cada viagem;
+- `trip_invites`: os códigos de convite;
+- a função `join_trip`, que coloca a pessoa no grupo a partir do código;
+- o aviso em tempo real (Realtime) para a tabela `shared_trips`.
+
+Como funciona no app: em **Pessoas da viagem › Convidar para editar junto**, o app cria um código de 8 letras e um link (`…/convite/CÓDIGO`). Quem recebe abre o link (ou toca em **Viagens › Entrar com código de convite**) e entra com a própria conta. As mudanças aparecem para todos em segundos. Se duas pessoas mexerem ao mesmo tempo sem internet, o app junta as duas versões: gastos, reservas e itens do checklist adicionados por qualquer uma ficam.
+
+Só quem participa da viagem consegue ler ou mudar a linha dela (regras de segurança no próprio banco). Quem criou pode tirar pessoas ou encerrar o grupo; quem participa fica com uma cópia.
+
 ## Onde ficam as viagens
 
 Cada pessoa tem uma linha na tabela `vaults`, com todas as viagens dela num único campo.

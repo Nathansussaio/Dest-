@@ -19,7 +19,7 @@ import type { Style, Slot } from '../types';
 import { tripStatus, periodLabel } from '../lib/trip';
 import { alertsFor } from '../lib/alerts';
 import { norm, plural, SEM_LONGO, MES_LONGO, cap, fmtShort, iso, today0 } from '../lib/format';
-import { PRIVACY_URL, TERMS_URL, SUPPORT_EMAIL } from '../config';
+import { PRIVACY_URL, TERMS_URL, SUPPORT_EMAIL, CLOUD_ENABLED } from '../config';
 
 const upcomingOf = (s: State) => s.trips.filter((t) => tripStatus(t).key === 'next').sort((a, b) => (a.start < b.start ? -1 : 1));
 const pastOf = (s: State) => s.trips.filter((t) => tripStatus(t).key === 'past').sort((a, b) => (a.start > b.start ? -1 : 1));
@@ -117,6 +117,7 @@ export function Trips() {
     <Screen>
       <TopBar large title="Viagens" right={<IconBtn icon="plus" accent label="Nova viagem" onPress={() => A.go('create')} />} />
       <Seg value={tabId} onChange={setTab} options={[{ id: 'next', label: 'Próximas (' + up.length + ')' }, { id: 'past', label: 'Anteriores (' + past.length + ')' }]} />
+      {CLOUD_ENABLED && s.user && s.user.id ? <Row style={{ marginTop: 10 }}><Btn sm kind="secondary" icon="users" label="Entrar com código de convite" onPress={() => A.openSheet('join')} /></Row> : null}
       <Gap h={16} />
       {list.length ? <Grid items={list} min={340} render={(t) => <TripRow t={t} s={s} />} /> : (
         <Empty icon="suitcase" title={tabId === 'next' ? 'Nenhuma viagem marcada' : 'Nenhuma viagem anterior'}

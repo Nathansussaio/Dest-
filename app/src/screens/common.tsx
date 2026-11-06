@@ -43,6 +43,7 @@ export function TripHero({ t, s, height = 220, onPress }: { t: Trip; s: State; h
     <Cover destId={t.destId} height={height} radius={22}>
       <View style={{ position: 'absolute', left: 16, top: 16, flexDirection: 'row', gap: 8 }}>
         <Pill>{v.st.countdown}</Pill>
+        {t.shared ? <Pill>Em grupo</Pill> : null}
         {v.wc ? <Pill>{v.wc.hi + '° / ' + v.wc.lo + '°'}</Pill> : null}
       </View>
       <View style={{ position: 'absolute', left: 18, right: 18, bottom: 18 }}>
@@ -61,7 +62,7 @@ export function TripRow({ t, s }: { t: Trip; s: State }) {
   return (
     <Card onPress={() => A.openTrip(t.id)} label={'Abrir ' + t.name} style={{ overflow: 'hidden', marginBottom: 12 }}>
       <Cover destId={t.destId} height={110} artW={140} artTop={20} artRight={8}>
-        <View style={{ position: 'absolute', left: 14, top: 12 }}><Pill>{v.st.countdown}</Pill></View>
+        <View style={{ position: 'absolute', left: 14, top: 12, flexDirection: 'row', gap: 6 }}><Pill>{v.st.countdown}</Pill>{t.shared ? <Pill>Em grupo</Pill> : null}</View>
         <View style={{ position: 'absolute', left: 16, bottom: 12, right: 120 }}><T v="h2" color="#FFFFFF" lines={1}>{t.name}</T></View>
       </Cover>
       <View style={{ padding: 14, gap: 4 }}>

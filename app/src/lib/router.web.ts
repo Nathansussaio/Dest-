@@ -4,6 +4,7 @@ import { getState, setState, subscribe, type Screen } from '../store/store';
 import * as A from '../store/actions';
 import { SITE_URL } from '../config';
 import { PLACE_BY_ID } from '../data';
+import { setPendingInvite } from '../store/shared';
 
 const SEG: Record<Screen, string> = {
   home: 'inicio', trips: 'viagens', explore: 'explorar', expenses: 'gastos', profile: 'perfil', create: 'nova-viagem',
@@ -46,12 +47,13 @@ export function titleFor(s: St): string {
   return (TITLE[s.screen] || 'Destí') + ' · Destí';
 }
 /* lê um endereço e devolve a tela */
-export function parsePath(p: string): { screen?: Screen; auth?: string; tripId?: string; day?: number; placeId?: string } | null {
+export function parsePath(p: string): { screen?: Screen; auth?: string; tripId?: string; day?: number; placeId?: string; invite?: string } | null {
   const parts = p.split('/').filter(Boolean).map((x) => decodeURIComponent(x));
   if (!parts.length) return null;
   const authKey = Object.keys(AUTH_SEG).find((k) => AUTH_SEG[k] && AUTH_SEG[k] === parts[0]);
   if (authKey) return { auth: authKey };
   if (parts[0] === 'lugar' && parts[1]) return { screen: 'place', placeId: parts[1] };
+  if (parts[0] === 'convite' && parts[1]) return { invite: parts[1] };
   if (parts[0] === 'viagem' && parts[1]) {
     if (!parts[2]) return { screen: 'trip', tripId: parts[1] };
     if (parts[2] === 'roteiro') return { screen: 'itinerary', tripId: parts[1], day: Math.max(0, (parseInt(parts[3] || '1', 10) || 1) - 1) };
@@ -66,6 +68,13 @@ export function parsePath(p: string): { screen?: Screen; auth?: string; tripId?:
 function apply(r: ReturnType<typeof parsePath>, pushHistory: boolean): boolean {
   const s = getState();
   if (!r) return false;
+  /* convite para viagem em grupo: com conta, entra direto; sem conta, entra depois de fazer login */
+  if (r.invite) {
+    const code = r.invite;
+    if (s.user && s.user.id) { A.joinByCode(code).then((e) => { if (e) A.showToast(e); }); }
+    else { setPendingInvite(code); if (!s.user) setState({ auth: 'login' }); A.showToast(s.user ? 'Para editar junto, entre com uma conta' : 'Entre ou crie sua conta para participar da viagem'); }
+    return true;
+  }
   if (r.auth) { if (!s.user) { setState({ auth: r.auth as any }); return true; } return false; }
   if (!s.user || !r.screen) return false;
   const screen: Screen = r.screen === 'created' ? 'trip' : r.screen; /* a tela de viagem criada só existe logo depois de criar */

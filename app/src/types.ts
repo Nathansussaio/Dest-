@@ -38,6 +38,8 @@ export interface Trip {
   styles: Style[]; pace: PaceId; plan: Record<string, number>;
   days: ItineraryItem[][];
   legs?: Leg[]; members?: Member[]; settlements?: Settlement[]; activity?: Activity[];
+  /* viagem em grupo sincronizada: quem criou e o código de convite (só neste celular) */
+  shared?: { owner: string; code?: string };
 }
 
 export interface Expense {

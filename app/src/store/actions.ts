@@ -14,6 +14,7 @@ import { cloudSignIn, cloudSignUp, cloudVerifySignup, cloudResend, cloudSendRese
 import { passProblem } from '../lib/auth';
 import { hashPassword } from '../lib/hash';
 import { ensureNotifPermission } from '../lib/device';
+import * as G from './shared';
 
 const S = getState;
 
@@ -251,6 +252,8 @@ export function saveTripEdit(f: TripEdit): Record<string, string> {
 export function deleteTrip() {
   const t = currentTrip(); if (!t) return;
   const u = snap(), id = t.id;
+  /* viagem em grupo: quem criou encerra o grupo (os outros ficam com uma cópia); quem foi convidado sai do grupo */
+  if (t.shared) { (G.isOwner(t) ? G.stopSharing(id) : G.leaveTrip(id)).catch(() => {}); }
   setState((s) => {
     const rest = s.trips.filter((x) => x.id !== id), cl = { ...s.checklist };
     delete cl[id];
@@ -317,10 +320,51 @@ export function removeMember(id: string) {
   const m = tripMembers(t).find((x) => x.id === id); if (!m) return;
   const inUse = S().expenses.some((e) => e.tripId === t.id && (e.paidBy === id || (e.split || []).indexOf(id) >= 0)) || (t.settlements || []).some((x) => x.from === id || x.to === id);
   if (inUse) { showToast(m.name + ' aparece em gastos ou acertos. Edite esses gastos antes de remover.'); return; }
+  if (/^u:/.test(id)) {
+    if (!G.isOwner(t)) { showToast('Só quem criou a viagem pode tirar alguém do grupo'); return; }
+    G.removeFromGroup(t.id, id).then((e) => { if (e) showToast(e); else { updateTrip((x) => ({ ...x, members: (x.members || []).filter((mm) => mm.id !== id) }), t.id); showToast(m.name + ' saiu do grupo'); } });
+    return;
+  }
   const u = snap();
   updateTrip((x) => ({ ...x, members: (x.members || []).filter((mm) => mm.id !== id) }));
   showToast(m.name + ' saiu da viagem', u);
 }
+
+/* ---------- Editar junto (cada pessoa no seu celular) ---------- */
+export function canEditTogether() { return G.canShare(); }
+export async function shareTripLive(): Promise<string | null> {
+  const t = currentTrip(); if (!t) return null;
+  const e = await G.shareTrip(t.id);
+  if (!e) showToast('Pronto! Mande o convite para quem vai editar junto');
+  return e;
+}
+export async function newInviteCode(): Promise<string | null> {
+  const t = currentTrip(); if (!t) return null;
+  return G.newInvite(t.id);
+}
+export async function joinByCode(code: string): Promise<string | null> {
+  const r = await G.joinTrip(code);
+  if (r.error) return r.error;
+  const t = S().trips.find((x) => x.id === r.tripId);
+  setState({ sheet: null, sheetArg: null });
+  if (t) { openTrip(t.id); showToast('Você entrou na viagem ' + t.name); }
+  return null;
+}
+export async function leaveGroup(): Promise<string | null> {
+  const t = currentTrip(); if (!t) return null;
+  const e = G.isOwner(t) ? await G.stopSharing(t.id) : await G.leaveTrip(t.id);
+  if (e) return e;
+  setState({ sheet: null });
+  if (G.isOwner(t) || S().trips.some((x) => x.id === t.id)) showToast('A viagem voltou a ser só sua. Quem participava fica com uma cópia.');
+  else { setState({ screen: 'trips', history: [] }); showToast('Você saiu de ' + t.name); }
+  return null;
+}
+export async function syncGroupNow() {
+  const ok = await G.syncShared();
+  showToast(ok ? 'Viagem atualizada com o grupo' : 'Sem conexão com o grupo agora. Tentamos de novo em instantes.');
+}
+G.setSharedToast((m) => showToast(m));
+G.setOnJoined((id) => { const t = S().trips.find((x) => x.id === id); if (t) { openTrip(id); showToast('Você entrou na viagem ' + t.name); } });
 export function settleDebt(d: { from: string; to: string; amount: number }) {
   const u = snap();
   updateTrip((x) => ({ ...x, settlements: (x.settlements || []).concat([{ id: uid('s'), from: d.from, to: d.to, amount: d.amount, date: iso(today0()) }]) }));
@@ -540,7 +584,7 @@ export function guestToSignup() {
 }
 export async function logout() {
   const u = S().user;
-  if (u && u.id) { await flushCloud(); await cloudSignOut(); }
+  if (u && u.id) { await G.flushShared().catch(() => {}); await flushCloud(); await cloudSignOut(); }
   setState({ user: null, auth: 'welcome', sheet: null, screen: 'home', history: [], ...freshData() });
   showToast('Você saiu da conta');
 }

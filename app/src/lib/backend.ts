@@ -144,3 +144,71 @@ export async function cloudSave(userId: string, payload: AccountData, updatedAt:
     return !error;
   } catch (e: any) { lastError = (e && e.message) || 'sem conexão'; return false; }
 }
+
+/* ---------- Viagem em grupo (veja supabase/schema-grupo.sql) ---------- */
+export interface SharedRow { id: string; owner: string; data: any; updated_at: string }
+function groupErr(e: any): string {
+  const m = String((e && (e.message || e.code)) || e || '').toLowerCase();
+  if (/invalid invite/.test(m)) return 'Código de convite não encontrado. Confira as letras e tente de novo.';
+  if (/trip full/.test(m)) return 'Esta viagem já tem 20 pessoas.';
+  if (/relation .* does not exist|could not find the (table|function)|schema cache|42p01|pgrst20[0-9]/.test(m)) return 'A viagem em grupo ainda não foi ligada no Supabase (falta rodar o schema-grupo.sql).';
+  return pt(e);
+}
+/* viagens compartilhadas de que a pessoa participa; undefined = não deu para ler agora */
+export async function cloudSharedList(): Promise<SharedRow[] | undefined> {
+  try {
+    const { data, error } = await sb().from('shared_trips').select('id, owner, data, updated_at');
+    if (error) return undefined;
+    return (data || []) as SharedRow[];
+  } catch { return undefined; }
+}
+export async function cloudSharedCreate(id: string, ownerId: string, ownerName: string, data: any, code: string): Promise<Result<string>> {
+  try {
+    const a = await sb().from('shared_trips').insert({ id, owner: ownerId, data }).select('updated_at').single();
+    if (a.error) return { ok: false, error: groupErr(a.error) };
+    const b = await sb().from('trip_members').insert({ trip_id: id, user_id: ownerId, name: ownerName });
+    if (b.error) return { ok: false, error: groupErr(b.error) };
+    const c = await sb().from('trip_invites').insert({ code, trip_id: id, created_by: ownerId });
+    if (c.error) return { ok: false, error: groupErr(c.error) };
+    return { ok: true, value: (a.data as any).updated_at as string };
+  } catch (e) { return { ok: false, error: groupErr(e) }; }
+}
+/* grava só se ninguém mudou desde a última leitura (prev); devolve a nova data, null se outra pessoa gravou antes */
+export async function cloudSharedPush(id: string, data: any, prev: string): Promise<string | null | undefined> {
+  try {
+    const { data: rows, error } = await sb().from('shared_trips').update({ data }).eq('id', id).eq('updated_at', prev).select('updated_at');
+    if (error) return undefined;
+    return rows && rows.length ? (rows[0] as any).updated_at as string : null;
+  } catch { return undefined; }
+}
+export async function cloudCreateInvite(tripId: string, userId: string, code: string): Promise<Result<string>> {
+  try {
+    const { error } = await sb().from('trip_invites').insert({ code, trip_id: tripId, created_by: userId });
+    return error ? { ok: false, error: groupErr(error) } : { ok: true, value: code };
+  } catch (e) { return { ok: false, error: groupErr(e) }; }
+}
+export async function cloudJoinTrip(code: string, name: string): Promise<Result<string>> {
+  try {
+    const { data, error } = await sb().rpc('join_trip', { invite: code, member_name: name });
+    return error ? { ok: false, error: groupErr(error) } : { ok: true, value: String(data) };
+  } catch (e) { return { ok: false, error: groupErr(e) }; }
+}
+export async function cloudLeaveTrip(tripId: string, userId: string): Promise<Result<null>> {
+  try {
+    const { error } = await sb().from('trip_members').delete().eq('trip_id', tripId).eq('user_id', userId);
+    return error ? { ok: false, error: groupErr(error) } : { ok: true, value: null };
+  } catch (e) { return { ok: false, error: groupErr(e) }; }
+}
+export async function cloudUnshareTrip(tripId: string): Promise<Result<null>> {
+  try {
+    const { error } = await sb().from('shared_trips').delete().eq('id', tripId);
+    return error ? { ok: false, error: groupErr(error) } : { ok: true, value: null };
+  } catch (e) { return { ok: false, error: groupErr(e) }; }
+}
+/* avisa quando alguém do grupo muda uma viagem; devolve a função para parar */
+export function cloudWatchShared(onChange: () => void): () => void {
+  try {
+    const ch = sb().channel('desti-grupo').on('postgres_changes' as any, { event: '*', schema: 'public', table: 'shared_trips' }, () => onChange()).subscribe();
+    return () => { try { sb().removeChannel(ch); } catch { /* ignora */ } };
+  } catch { return () => {}; }
+}
