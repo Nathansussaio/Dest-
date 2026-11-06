@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import 'leaflet/dist/leaflet.css';
-import { T } from '../../ui';
+import { T, Btn } from '../../ui';
 import { useTheme } from '../../theme/useTheme';
 import { plural } from '../../lib/format';
 import { SchematicMap } from './SchematicMap';
@@ -21,11 +21,12 @@ function darkCss() {
   document.head.appendChild(st);
 }
 
-export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; sel: string | null; onSelect: (k: string) => void; color: string }) {
+export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; sel: string | null; onSelect: (k: string | null) => void; color: string }) {
   const { c, isDark } = useTheme();
   const box = useRef<any>(null);
   const map = useRef<any>(null);
   const layer = useRef<any>(null);
+  const marks = useRef<Record<string, any>>({});
   /* o Leaflet só é baixado quando o mapa abre (deixa o site mais leve) */
   const [L, setLeaflet] = useState<any>(null);
   const [failed, setFailed] = useState(false);
@@ -54,31 +55,64 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
     return () => { if (map.current) { map.current.remove(); map.current = null; layer.current = null; } };
   }, [failed, L, pts.length > 0, isDark]);
 
-  /* marcadores e enquadramento */
+  /* enquadra todos os lugares (ao abrir, ao trocar de dia e ao tocar em "Ver todos") */
+  const fitAll = (animate: boolean) => {
+    if (!map.current) return;
+    const bounds: [number, number][] = pts.map((x) => [x.p.lat as number, x.p.lng as number]);
+    if (bounds.length === 1) map.current.setView(bounds[0], 15, { animate });
+    else if (bounds.length) map.current.fitBounds(bounds, { padding: [40, 40], animate });
+  };
+
+  /* marcadores */
   useEffect(() => {
     if (!map.current || !layer.current) return;
     layer.current.clearLayers();
-    const bounds: [number, number][] = [];
+    marks.current = {};
     pts.forEach((x) => {
       const on = x.key === sel;
-      const html = '<div style="width:30px;height:30px;border-radius:15px;background:' + (on ? c.over : color) + ';border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;color:#fff;font:700 12px -apple-system,Segoe UI,Roboto,sans-serif">' + x.n + '</div>';
-      const icon = (L as any).divIcon({ html, className: 'desti-pin', iconSize: [30, 30], iconAnchor: [15, 15] });
+      const size = on ? 38 : 30;
+      const html = '<div style="width:' + size + 'px;height:' + size + 'px;border-radius:' + size / 2 + 'px;background:' + (on ? c.over : color) + ';border:' + (on ? 3 : 2) + 'px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,' + (on ? '.45' : '.3') + ');display:flex;align-items:center;justify-content:center;color:#fff;font:700 ' + (on ? 14 : 12) + 'px -apple-system,Segoe UI,Roboto,sans-serif">' + x.n + '</div>';
+      const icon = (L as any).divIcon({ html, className: 'desti-pin', iconSize: [size, size], iconAnchor: [size / 2, size / 2] });
       const m = (L as any).marker([x.p.lat, x.p.lng], { icon, title: x.n + '. ' + x.p.name, keyboard: true, zIndexOffset: on ? 1000 : 0 });
       m.on('click', () => onSelect(x.key));
-      m.bindTooltip(x.n + '. ' + x.p.name + ' · Dia ' + (x.di + 1) + ' · ' + x.time, { direction: 'top', offset: [0, -14] });
+      m.bindTooltip(x.n + '. ' + x.p.name + ' · Dia ' + (x.di + 1) + ' · ' + x.time, { direction: 'top', offset: [0, -size / 2 + 1] });
       m.addTo(layer.current);
-      bounds.push([x.p.lat as number, x.p.lng as number]);
+      marks.current[x.key] = m;
     });
-    if (bounds.length === 1) map.current.setView(bounds[0], 15);
-    else if (bounds.length) map.current.fitBounds(bounds, { padding: [40, 40] });
-    setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 50);
+    const t = marks.current[sel || ''];
+    if (t) t.openTooltip();
   }, [sig, sel, color, map.current]);
+
+  /* troca de dia (ou mapa recém-criado): mostra todos */
+  useEffect(() => {
+    if (!map.current) return;
+    fitAll(false);
+    setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 50);
+  }, [sig, map.current]);
+
+  /* tocou num lugar (na lista ou no mapa): aproxima nele; desmarcou: volta a mostrar todos */
+  const hadSel = useRef(false);
+  useEffect(() => {
+    if (!map.current) return;
+    const x = pts.find((p) => p.key === sel);
+    if (x) {
+      hadSel.current = true;
+      map.current.flyTo([x.p.lat, x.p.lng], Math.max(map.current.getZoom() || 0, 16), { duration: 0.8 });
+      /* no celular a lista fica embaixo do mapa: rola até o mapa se ele estiver fora da tela */
+      const el = box.current;
+      if (el && typeof el.getBoundingClientRect === 'function') {
+        const r = el.getBoundingClientRect(), h = window.innerHeight || 0;
+        if (r.top < 0 || r.bottom > h) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    } else if (hadSel.current) { hadSel.current = false; fitAll(true); }
+  }, [sel, map.current]);
 
   if (failed || !pts.length) return <SchematicMap items={items} sel={sel} onSelect={onSelect} color={color} />;
   const missing = items.length - pts.length;
   return (
     <View>
       <View style={{ height: 420, borderRadius: 20, overflow: 'hidden', backgroundColor: c.soft }}>
+        {sel ? <View style={{ position: 'absolute', top: 10, right: 10, zIndex: 900, backgroundColor: c.card, borderRadius: 12, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 }}><Btn sm kind="secondary" icon="map" label="Ver todos" onPress={() => onSelect(null)} /></View> : null}
         {!tilesOk ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 500 }}><T v="smallMuted">Carregando o mapa…</T></View> : null}
         {React.createElement('div', { ref: box, style: { width: '100%', height: '100%' }, className: isDark ? 'desti-map-dark' : undefined, role: 'region', 'aria-label': 'Mapa com ' + plural(pts.length, 'lugar', 'lugares') + ' do roteiro' })}
       </View>
