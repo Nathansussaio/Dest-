@@ -31,6 +31,8 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
   const [L, setLeaflet] = useState<any>(null);
   const [failed, setFailed] = useState(false);
   const [tilesOk, setTiles] = useState(false);
+  /* o mapa já existe (dispara o enquadramento e os marcadores sem depender de outra atualização da tela) */
+  const [ready, setReady] = useState(0);
   useEffect(() => {
     let alive = true;
     import('leaflet').then((m: any) => { const lib = m && (m.default || m); if (!alive) return; if (lib && typeof lib.map === 'function') setLeaflet(lib); else setFailed(true); }).catch(() => alive && setFailed(true));
@@ -49,6 +51,7 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
       tl.once('load', () => setTiles(true));
       tl.addTo(map.current);
       layer.current = (L as any).layerGroup().addTo(map.current);
+      setReady((n) => n + 1);
     } catch {
       setFailed(true);
     }
@@ -81,14 +84,14 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
     });
     const t = marks.current[sel || ''];
     if (t) t.openTooltip();
-  }, [sig, sel, color, map.current]);
+  }, [sig, sel, color, ready]);
 
   /* troca de dia (ou mapa recém-criado): mostra todos */
   useEffect(() => {
     if (!map.current) return;
     fitAll(false);
     setTimeout(() => { if (map.current) map.current.invalidateSize(); }, 50);
-  }, [sig, map.current]);
+  }, [sig, ready]);
 
   /* tocou num lugar (na lista ou no mapa): aproxima nele; desmarcou: volta a mostrar todos */
   const hadSel = useRef(false);
@@ -105,7 +108,7 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
         if (r.top < 0 || r.bottom > h) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     } else if (hadSel.current) { hadSel.current = false; fitAll(true); }
-  }, [sel, map.current]);
+  }, [sel, ready]);
 
   if (failed || !pts.length) return <SchematicMap items={items} sel={sel} onSelect={onSelect} color={color} />;
   const missing = items.length - pts.length;
