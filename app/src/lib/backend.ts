@@ -152,7 +152,10 @@ function groupErr(e: any): string {
   if (/invalid invite/.test(m)) return 'Código de convite não encontrado. Confira as letras e tente de novo.';
   if (/trip full/.test(m)) return 'Esta viagem já tem 20 pessoas.';
   if (/relation .* does not exist|could not find the (table|function)|schema cache|42p01|pgrst20[0-9]/.test(m)) return 'A viagem em grupo ainda não foi ligada no Supabase (falta rodar o schema-grupo.sql).';
-  return pt(e);
+  if (/network|fetch|timeout/.test(m)) return pt(e);
+  /* mostra o motivo técnico junto, para dar para descobrir o que houve */
+  const why = String((e && e.message) || e || '').slice(0, 140);
+  return 'Não foi possível concluir agora.' + (why ? ' Detalhe: ' + why : '');
 }
 /* viagens compartilhadas de que a pessoa participa; undefined = não deu para ler agora */
 export async function cloudSharedList(): Promise<SharedRow[] | undefined> {
@@ -164,7 +167,10 @@ export async function cloudSharedList(): Promise<SharedRow[] | undefined> {
 }
 export async function cloudSharedCreate(id: string, ownerId: string, ownerName: string, data: any, code: string): Promise<Result<string>> {
   try {
-    const a = await sb().from('shared_trips').insert({ id, owner: ownerId, data }).select('updated_at').single();
+    /* grava e só depois lê: a regra de leitura do banco não enxerga a linha no mesmo passo em que ela é criada */
+    const a0 = await sb().from('shared_trips').insert({ id, owner: ownerId, data });
+    if (a0.error) return { ok: false, error: groupErr(a0.error) };
+    const a = await sb().from('shared_trips').select('updated_at').eq('id', id).single();
     if (a.error) return { ok: false, error: groupErr(a.error) };
     const b = await sb().from('trip_members').insert({ trip_id: id, user_id: ownerId, name: ownerName });
     if (b.error) return { ok: false, error: groupErr(b.error) };
