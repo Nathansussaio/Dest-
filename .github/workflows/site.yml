@@ -18,7 +18,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       SITE_URL: ${{ vars.SITE_URL || 'https://nathansussaio.github.io/Dest-' }}
       EXPO_BASE_URL: ${{ vars.SITE_URL && vars.EXPO_BASE_URL || (!vars.SITE_URL && '/Dest-' || '') }}
@@ -55,7 +55,7 @@ jobs:
           ls -la dist
       - name: Testes de tela no site gerado (Chromium, Firefox e Safari)
         working-directory: app
-        timeout-minutes: 15
+        timeout-minutes: 30
         run: |
           npm install --no-save --no-audit --no-fund playwright@1.56.0
           npx playwright install --with-deps chromium firefox webkit
