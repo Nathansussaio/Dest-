@@ -1,0 +1,16 @@
+# Mostra no registro o resultado da busca de localização (para revisar)
+name: Ver localizações encontradas
+on:
+  workflow_dispatch:
+    inputs:
+      run_id: { description: 'Número da execução de "Localizar lugares no mapa"', required: true }
+permissions:
+  contents: read
+  actions: read
+jobs:
+  ver:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: geocode, run-id: '${{ inputs.run_id }}', github-token: '${{ github.token }}' }
+      - run: gzip -9c geocode-out.json | base64 -w 0; echo
