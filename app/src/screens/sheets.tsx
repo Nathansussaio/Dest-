@@ -70,7 +70,7 @@ function ExpenseSheet({ arg }: { arg: { mode?: 'manual' | 'scan' | 'edit'; exp?:
   const [amount, setAmount] = useState(e ? String(e.orig ? e.orig.value : e.amount) : '');
   const [currency, setCurrency] = useState<string>(cur0);
   /* cotação do dia (a mesma do topo do site); sem internet, a última guardada; sem nenhuma, um valor de referência */
-  const fx = useFx();
+  const fx = useFx(true);
   const liveRate = (code: string) => { const x = fx && fx.rates.find((q) => q.code === code); return x ? x.brl : null; };
   const fmtRateBr = (v: number) => v.toFixed(2).replace('.', ',');
   const rateFor = (code: string) => fmtRateBr(liveRate(code) || DEMO_RATES[code] || 0);
@@ -116,13 +116,11 @@ function ExpenseSheet({ arg }: { arg: { mode?: 'manual' | 'scan' | 'edit'; exp?:
           {(() => {
             const lv = liveRate(currency);
             if (!lv) return <T v="smallMuted" style={{ marginTop: 4 }}>Não deu para buscar a cotação de hoje. Confira o valor (o banco ou o cartão mostram a cotação usada).</T>;
-            const when = new Date(fx!.at);
-            const hh = String(when.getHours()).padStart(2, '0') + ':' + String(when.getMinutes()).padStart(2, '0');
             const same = Math.abs(lv - r) < 0.005;
             return (
               <Row gap={8} style={{ marginTop: 4, flexWrap: 'wrap' }}>
-                <T v="smallMuted">{'Cotação de hoje: R$ ' + fmtRateBr(lv) + ' (' + (fx!.source === 'awesomeapi' ? 'atualizada às ' + hh : 'Banco Central Europeu') + ')'}</T>
-                {!same ? <LinkBtn label="Usar a de hoje" onPress={() => { setRate(fmtRateBr(lv)); setRateTouched(false); }} /> : null}
+                <T v="smallMuted">{'Cotação agora: R$ ' + fmtRateBr(lv)}</T>
+                {!same ? <LinkBtn label="Usar a cotação agora" onPress={() => { setRate(fmtRateBr(lv)); setRateTouched(false); }} /> : null}
               </Row>
             );
           })()}

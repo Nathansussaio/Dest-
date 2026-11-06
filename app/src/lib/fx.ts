@@ -1,12 +1,13 @@
 /* Cotação do dia (dólar, euro e libra em reais) para o cabeçalho do site.
-   Busca ao abrir e a cada 30 minutos; guarda a última no aparelho para mostrar sem internet. */
+   Atualiza sozinha a cada minuto enquanto a página está aberta (a fonte muda durante o dia);
+   guarda a última no aparelho para mostrar sem internet. */
 import { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AWESOME_URL, FRANKFURTER_URL, parseAwesome, parseFrankfurter, type FxQuote } from './fxCore';
 export * from './fxCore';
 
 const KEY = 'desti:fx';
-const FRESH = 30 * 60 * 1000;
+const FRESH = 60 * 1000;
 let mem: { t: number; q: FxQuote } | null = null;
 let inflight: Promise<FxQuote | null> | null = null;
 
@@ -31,14 +32,19 @@ async function load(force?: boolean): Promise<FxQuote | null> {
   return mem ? mem.q : null; /* sem internet: última cotação guardada */
 }
 
-export function useFx(): FxQuote | null {
+/* live: busca na hora ao abrir (tela de gasto), sem esperar o próximo minuto */
+export function useFx(live?: boolean): FxQuote | null {
   const [q, setQ] = useState<FxQuote | null>(mem ? mem.q : null);
   useEffect(() => {
     let alive = true;
+    const hidden = () => typeof document !== 'undefined' && !!(document as any).hidden;
     const run = (force?: boolean) => load(force).then((v) => { if (alive && v) setQ(v); });
-    run();
-    const id = setInterval(() => run(true), FRESH);
-    return () => { alive = false; clearInterval(id); };
+    run(live);
+    /* com a página escondida (outra aba, celular bloqueado) não busca; ao voltar, atualiza na hora */
+    const id = setInterval(() => { if (!hidden()) run(); }, 15000);
+    const onShow = () => { if (!hidden()) run(); };
+    if (typeof document !== 'undefined' && document.addEventListener) document.addEventListener('visibilitychange', onShow);
+    return () => { alive = false; clearInterval(id); if (typeof document !== 'undefined' && document.removeEventListener) document.removeEventListener('visibilitychange', onShow); };
   }, []);
   return q;
 }
