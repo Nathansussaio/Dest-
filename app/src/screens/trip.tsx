@@ -1,5 +1,5 @@
 /* Viagem: criar, confirmação, detalhes, roteiro dia a dia, adicionar lugar, mapa e lugar */
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Pressable, Linking, ScrollView, useWindowDimensions, PanResponder, Platform } from 'react-native';
 import { useApp, setState } from '../store/store';
 import { BOOKING_AFFILIATE_ID, GETYOURGUIDE_PARTNER_ID } from '../config';
@@ -12,6 +12,7 @@ import {
 import { useTheme, useSite, useSiteWide, usePad, SITE_MAX } from '../theme/useTheme';
 import { tripInfo, PlaceCard, NoTrip } from './common';
 import { PlacesMap } from './maps/PlacesMap';
+import { prefetchMap } from '../lib/prefetchMap';
 import { useForecast } from '../lib/forecast';
 import {
   DESTINATIONS, STYLES, STYLE_INFO, PACES, PACE_BY_ID, PLACE_BY_ID, CAT_INFO, CATEGORIES, PLACES, CITY_NAME, DISHES, RES_TYPES, DOW_PLURAL,
@@ -604,6 +605,7 @@ export function TripScreen() {
   const s = useApp();
   const { c } = useTheme();
   const [wxOpen, setWx] = useState(false);
+  useEffect(() => { prefetchMap(); }, []);
   const [dishOpen, setDish] = useState(false);
   const site = useSite();
   const siteWide = useSiteWide();

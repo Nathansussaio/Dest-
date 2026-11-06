@@ -29,6 +29,7 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
   /* o Leaflet só é baixado quando o mapa abre (deixa o site mais leve) */
   const [L, setLeaflet] = useState<any>(null);
   const [failed, setFailed] = useState(false);
+  const [tilesOk, setTiles] = useState(false);
   useEffect(() => {
     let alive = true;
     import('leaflet').then((m: any) => { const lib = m && (m.default || m); if (!alive) return; if (lib && typeof lib.map === 'function') setLeaflet(lib); else setFailed(true); }).catch(() => alive && setFailed(true));
@@ -43,7 +44,9 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
     try {
       map.current = (L as any).map(box.current, { zoomControl: true, attributionControl: true, scrollWheelZoom: false });
       darkCss();
-      (L as any).tileLayer(TILES, { attribution: ATTRIB, maxZoom: 19 }).addTo(map.current);
+      const tl = (L as any).tileLayer(TILES, { attribution: ATTRIB, maxZoom: 19, crossOrigin: '', keepBuffer: 3, updateWhenZooming: false });
+      tl.once('load', () => setTiles(true));
+      tl.addTo(map.current);
       layer.current = (L as any).layerGroup().addTo(map.current);
     } catch {
       setFailed(true);
@@ -76,6 +79,7 @@ export function PlacesMap({ items, sel, onSelect, color }: { items: MapItem[]; s
   return (
     <View>
       <View style={{ height: 420, borderRadius: 20, overflow: 'hidden', backgroundColor: c.soft }}>
+        {!tilesOk ? <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', zIndex: 500 }}><T v="smallMuted">Carregando o mapa…</T></View> : null}
         {React.createElement('div', { ref: box, style: { width: '100%', height: '100%' }, className: isDark ? 'desti-map-dark' : undefined, role: 'region', 'aria-label': 'Mapa com ' + plural(pts.length, 'lugar', 'lugares') + ' do roteiro' })}
       </View>
       {missing > 0 ? <T v="smallMuted" style={{ marginTop: 6 }}>{plural(missing, 'lugar ainda sem localização exata ficou', 'lugares ainda sem localização exata ficaram') + ' fora do mapa; veja na lista abaixo.'}</T> : null}
