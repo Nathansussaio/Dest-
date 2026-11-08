@@ -5,7 +5,11 @@ const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '
 http.createServer((req, res) => {
   const p = decodeURIComponent(req.url.split('?')[0]);
   let f = path.join(root, p);
-  if (f.startsWith(root) && fs.existsSync(f) && fs.statSync(f).isDirectory()) f = path.join(f, 'index.html');
+  if (f.startsWith(root) && fs.existsSync(f) && fs.statSync(f).isDirectory()) {
+    /* como o GitHub Pages: pasta sem a barra no fim vira endereço com barra (301) */
+    if (!p.endsWith('/')) { const q = req.url.indexOf('?') >= 0 ? req.url.slice(req.url.indexOf('?')) : ''; res.writeHead(301, { location: p + '/' + q }); res.end(); return; }
+    f = path.join(f, 'index.html');
+  }
   if (!f.startsWith(root) || !fs.existsSync(f)) {
     const parts = p.split('/').filter(Boolean);
     const nf = parts.length ? path.join(root, parts[0], '404.html') : path.join(root, '404.html');

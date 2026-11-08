@@ -218,3 +218,36 @@ export function cloudWatchShared(onChange: () => void): () => void {
     return () => { try { sb().removeChannel(ch); } catch { /* ignora */ } };
   } catch { return () => {}; }
 }
+
+/* ---------- Roteiro público, só leitura (veja supabase/schema-publico.sql) ---------- */
+function publicErr(e: any): string {
+  const m = String((e && (e.message || e.code)) || e || '').toLowerCase();
+  if (/too many links/.test(m)) return 'Você já tem 100 links públicos. Desative alguns em viagens antigas.';
+  if (/relation .* does not exist|could not find the (table|function)|schema cache|42p01|42883|pgrst20[0-9]/.test(m)) return 'O link público ainda não foi ligado no Supabase (falta rodar o schema-publico.sql).';
+  if (/network|fetch|timeout|failed to fetch/.test(m)) return 'Sem conexão agora. Tente de novo quando a internet voltar.';
+  return 'Não foi possível concluir agora.' + (e && e.message ? ' Detalhe: ' + String(e.message).slice(0, 140) : '');
+}
+/* qualquer pessoa: lê pelo id. null = não existe; undefined = não deu para ler (conexão) */
+export async function cloudPublicGet(id: string): Promise<{ data: any } | null | undefined> {
+  try {
+    const { data, error } = await sb().rpc('get_public_trip', { pid: id });
+    /* função ainda não criada no Supabase (falta o schema-publico.sql): para quem abre, o roteiro não existe */
+    if (error) return /could not find the function|pgrst202|42883|schema cache/i.test(String(error.message || '') + ' ' + String((error as any).code || '')) ? null : undefined;
+    return data ? { data } : null;
+  } catch { return undefined; }
+}
+export async function cloudPublicSave(id: string, ownerId: string, tripId: string, data: any, isNew: boolean): Promise<Result<null>> {
+  try {
+    const q = isNew
+      ? sb().from('public_trips').insert({ id, owner: ownerId, trip_id: tripId, data })
+      : sb().from('public_trips').update({ data, updated_at: new Date().toISOString() }).eq('id', id);
+    const { error } = await q;
+    return error ? { ok: false, error: publicErr(error) } : { ok: true, value: null };
+  } catch (e) { return { ok: false, error: publicErr(e) }; }
+}
+export async function cloudPublicDelete(id: string): Promise<Result<null>> {
+  try {
+    const { error } = await sb().from('public_trips').delete().eq('id', id);
+    return error ? { ok: false, error: publicErr(error) } : { ok: true, value: null };
+  } catch (e) { return { ok: false, error: publicErr(e) }; }
+}

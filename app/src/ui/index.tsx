@@ -50,7 +50,7 @@ export function Logo({ size = 44, word = true, color, textSize }: { size?: numbe
 
 /* ---------- Texto ---------- */
 type Variant = 'h1' | 'h2' | 'title' | 'lt' | 'body' | 'muted' | 'small' | 'smallMuted' | 'kind' | 'label' | 'big';
-export function T({ v = 'body', color, style, children, lines, center }: { v?: Variant; color?: string; style?: StyleProp<TextStyle>; children: Children; lines?: number; center?: boolean }) {
+export function T({ v = 'body', color, style, children, lines, center, selectable }: { v?: Variant; color?: string; style?: StyleProp<TextStyle>; children: Children; lines?: number; center?: boolean; selectable?: boolean }) {
   const { c, fs } = useTheme();
   const base: Record<Variant, TextStyle> = {
     h1: { fontSize: fs(30), lineHeight: fs(35), fontWeight: '700', letterSpacing: -0.5, color: c.ink },
@@ -68,7 +68,7 @@ export function T({ v = 'body', color, style, children, lines, center }: { v?: V
   /* títulos marcados como títulos: leitores de tela e o Google entendem a estrutura da página */
   const level = v === 'h1' || v === 'big' ? 1 : v === 'h2' ? 2 : v === 'title' ? 3 : 0;
   const a11y: any = level ? { accessibilityRole: 'header', role: 'heading', 'aria-level': level } : null;
-  return <Text {...a11y} numberOfLines={lines} style={[base[v], color ? { color } : null, center ? { textAlign: 'center' } : null, style]}>{children}</Text>;
+  return <Text {...a11y} selectable={selectable} numberOfLines={lines} style={[base[v], color ? { color } : null, center ? { textAlign: 'center' } : null, style]}>{children}</Text>;
 }
 
 /* ---------- Estrutura ---------- */

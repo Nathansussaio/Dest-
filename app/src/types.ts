@@ -27,6 +27,8 @@ export interface Leg { destId: string; name?: string; days: number }
 export interface Member {
   id: string; name: string; email?: string;
   status: 'owner' | 'ativo' | 'pendente'; role?: 'editar' | 'ver';
+  /* lugar reservado para um viajante ainda sem nome (a viagem foi criada para N pessoas) */
+  placeholder?: boolean;
 }
 
 export interface Settlement { id: string; from: string; to: string; amount: number; date: string }
@@ -40,6 +42,8 @@ export interface Trip {
   legs?: Leg[]; members?: Member[]; settlements?: Settlement[]; activity?: Activity[];
   /* viagem em grupo sincronizada: quem criou e o código de convite (só neste celular) */
   shared?: { owner: string; code?: string };
+  /* link público só de leitura (id em public_trips; só neste aparelho/conta de quem criou) */
+  publicId?: string;
 }
 
 export interface Expense {

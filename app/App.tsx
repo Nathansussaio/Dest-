@@ -18,6 +18,7 @@ import { Create, Created, TripScreen, Itinerary, AddPlace, MapScreen, PlaceScree
 import { Expenses, Docs, Assistant } from './src/screens/money';
 import { SheetHost } from './src/screens/sheets';
 import { TopNav, SiteHeader, Landing } from './src/screens/site';
+import { NotFound, PublicTripPage } from './src/screens/public';
 
 const SCREENS: Record<Screen, React.ComponentType> = {
   home: Home, trips: Trips, explore: Explore, expenses: Expenses, profile: Profile,
@@ -103,13 +104,23 @@ function Root() {
 
   const Body = s.user ? SCREENS[s.screen] || Home : AuthRouter;
   const showTabs = !!s.user && WITH_TABS.indexOf(s.screen) >= 0;
+  if (site && s.publicView) {
+    /* roteiro compartilhado por link: abre para qualquer pessoa, com ou sem conta */
+    return (
+      <View style={{ flex: 1, backgroundColor: c.bg }}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <PublicTripPage id={s.publicView} />
+        <Toast />
+      </View>
+    );
+  }
   if (site) {
     /* navegador (qualquer largura): layout de site com menu no topo e rodapé; sem conta, a página de apresentação */
     return (
       <View style={{ flex: 1, backgroundColor: c.bg }}>
         <StatusBar style={isDark ? 'light' : 'dark'} />
-        {s.user ? <TopNav active={TAB_OF[s.screen] || 'home'} /> : s.auth !== 'welcome' ? <SiteHeader /> : null}
-        <View style={{ flex: 1 }}>{s.user ? <Body /> : s.auth === 'welcome' ? <Landing /> : <AuthRouter />}</View>
+        {s.user ? <TopNav active={TAB_OF[s.screen] || 'home'} /> : s.auth !== 'welcome' || s.notFound ? <SiteHeader /> : null}
+        <View style={{ flex: 1 }}>{s.notFound ? <NotFound /> : s.user ? <Body /> : s.auth === 'welcome' ? <Landing /> : <AuthRouter />}</View>
         <Toast />
         <SheetHost />
       </View>

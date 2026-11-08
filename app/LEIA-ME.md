@@ -74,13 +74,22 @@ O arquivo `.env` nunca vai para o GitHub nem para as lojas: ele já está no `.g
   - **editar as paradas** de uma viagem já criada, em Editar viagem: trocar, incluir, tirar e reordenar cidades e mudar os dias. Os dias já montados continuam na mesma cidade, e os dias novos são montados automaticamente;
   - na página da viagem, **clima e hotéis de cada parada**, com as datas de cada cidade;
   - o roteiro automático inclui o dia de deslocamento entre as cidades, e a página da viagem mostra as paradas com as datas de cada uma.
-- **Endereços e botão Voltar no site:** cada tela tem o próprio endereço (por exemplo `/viagem/<id>/roteiro/2` ou `/lugar/<id>`). O Voltar e o Avançar do navegador seguem as telas, recarregar mantém a tela e dá para abrir um link direto. O título da aba muda com a tela.
+- **Endereços e botão Voltar no site:** cada tela tem o próprio endereço, e todos abrem direto com "200 OK" no GitHub Pages (link colado, página recarregada, link do WhatsApp, aba anônima):
+  - telas fixas são pastas: `/viagens/`, `/explorar/`, `/gastos/`, `/perfil/`, `/nova-viagem/`, `/entrar/`…;
+  - telas com id usam o id na consulta: `/viagem/?id=<id>`, `/viagem/?id=<id>&tela=roteiro&dia=2`, `/viagem/?id=<id>&tela=mapa`, `/lugar/?id=<id>`;
+  - roteiro público: `/roteiro/?id=<id>`; convite para editar junto: `/convite/?c=<código>`.
+
+  Na publicação, `tools/static-routes.ts` grava uma cópia do `index.html` em cada pasta, com título próprio (a lista de pastas fica em `src/lib/routes.ts`). Endereços antigos (`/viagem/<id>/mapa`, `/convite/<código>`) continuam abrindo pelo `404.html` e são trocados pelo novo. Endereço que não existe mostra "Página não encontrada"; viagem que não está no aparelho nem na conta mostra "Viagem não encontrada". O Voltar e o Avançar do navegador seguem as telas, e o título da aba muda com a tela.
+- **Link público do roteiro (só leitura):** em Compartilhar roteiro › Criar link público, quem tem conta gera um link `/roteiro/?id=…`. Quem recebe vê destino, datas, quantidade de viajantes, clima típico, mapa e o roteiro dia a dia, sem login. Gastos, orçamento, reservas, códigos, nomes das pessoas e anotações não aparecem. O link mostra sempre a versão mais nova e pode ser desativado. Precisa rodar uma vez o `supabase/schema-publico.sql`.
+- **Modo visitante:** as viagens ficam salvas neste navegador (voltam ao recarregar ou reabrir) e não sincronizam. O Perfil mostra onde ficam os dados, avisa antes de sair do modo visitante, e criar conta (ou entrar numa conta) leva as viagens do visitante junto, sem apagar as da conta.
+- **Viajantes e divisão de gastos:** a quantidade de viajantes e a lista de pessoas são a mesma coisa. Uma viagem para 2 já começa com "você" e "Viajante 2"; dá para trocar o nome no lápis, adicionar (o nome ocupa o primeiro lugar sem nome) e remover (a divisão é recalculada; quem pagou algum gasto não pode ser removido antes de editar esse gasto). Nomes repetidos não entram.
+- **Gastos em outra moeda:** gasto novo começa sempre em R$. A conversão só acontece ao escolher € ou US$, com a cotação do momento já preenchida. Antes de registrar, um resumo mostra o valor original, a cotação e quanto entra no orçamento; o botão mostra o valor final. A lista mostra a moeda original.
 - **Site mais leve e offline:** o site não carrega mais as bibliotecas que só servem no celular, e o mapa só é baixado quando abre. Um service worker (`public/sw.js`) guarda o site no aparelho, então ele abre mesmo sem internet.
 - **Google e acessibilidade:** a página já chega com o texto de apresentação em HTML, os títulos são marcados como títulos e o foco do teclado aparece em verde-azulado.
 - **Publicação mais segura:** antes de publicar, o GitHub testa o site gerado no Chromium, no Firefox e no Safari (WebKit), no computador e no celular. Se algum teste falhar, o site antigo continua no ar. Outra tarefa (`supabase-ativo.yml`) faz uma consulta leve no banco a cada 3 dias, para o Supabase grátis não pausar.
 - **Orçamento opcional:** ao criar ou editar uma viagem, o orçamento pode ficar em branco. Sem ele, a tela de gastos mostra só o total gasto, com a opção "Definir orçamento".
 - **Arrastar atividades entre dias:** no roteiro, segure no ⠿ de uma atividade e solte em cima de outro dia, na faixa de dias do topo. Em Editar dia, continua existindo o botão de mover para outro dia.
-- **Backup em arquivo:** em Perfil › Backup, dá para baixar um arquivo com todas as viagens, gastos e reservas e restaurar depois, neste ou em outro aparelho. Isso funciona mesmo sem a nuvem.
+- **Backup em arquivo:** em Perfil › Backup, dá para baixar um arquivo com todas as viagens, gastos e reservas e restaurar depois, neste ou em outro aparelho. Ao restaurar, o app pergunta: juntar com as viagens atuais (não apaga nada) ou substituir tudo (com Desfazer). Arquivo estragado é recusado sem mexer em nada. Funciona mesmo sem a nuvem.
 - **Previsão do tempo real:** nos 16 dias antes da viagem, aparece a previsão de cada dia na página da viagem e no topo de cada dia do roteiro. Antes disso, aparece o clima típico do mês.
 - **Viagem em grupo sincronizada:** em Pessoas da viagem › Convidar para editar junto, o app cria um código e um link de convite. Cada pessoa entra com a própria conta, no próprio celular, e todo mundo edita o mesmo roteiro, gastos, reservas e checklist; as mudanças chegam em segundos. Precisa rodar uma vez o `supabase/schema-grupo.sql` (veja `supabase/LEIA-ME.md`).
 - **Pessoas da viagem:** quem não usa o app entra só pelo nome, para dividir os gastos. Mandar o roteiro para o grupo continua funcionando.
@@ -208,7 +217,8 @@ No site, o mapa é real (OpenStreetMap); se não carregar, aparece a versão apr
 
 ## 9. Como o código foi conferido
 
-- **Testes das regras:** os 19 passaram.
+- **Testes das regras:** `npx tsx --test tests/*.test.ts` (39 testes: endereços, conversão de moeda, divisão de gastos, backup, grupo, cotação e outros).
+- **Teste do site no GitHub:** a cada publicação, `tests-e2e/smoke.mjs` testa o site gerado no Chromium, Firefox e Safari (WebKit), no computador e no celular: criar viagem, roteiro, Voltar, link numa aba nova, rotas diretas com 200, "Página não encontrada" e roteiro público inexistente.
 - **Tipos (TypeScript):** sem erros, usando tipos simplificados dos pacotes. Rode `npm run typecheck` depois do `npm install` para conferir com os tipos oficiais.
 - **Telas:** desenhadas num navegador por um adaptador simples, para iPhone, Android e computador.
 - **Teste no aparelho:** um teste clicou o caminho completo sem nuvem e passou: criar conta, criar viagem, roteiro, gastos, adicionar pessoa, sair, errar a senha, entrar de novo e reabrir o app.

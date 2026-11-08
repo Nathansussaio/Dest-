@@ -1,0 +1,45 @@
+# Confere o site publicado de verdade (depois de cada publicação, ou à mão em Actions › Conferir o site publicado).
+# Abre cada endereço público e confere o status (200) e o conteúdo; depois roda os testes de tela no endereço real.
+name: Conferir o site publicado
+on:
+  workflow_run:
+    workflows: ['Publicar o site']
+    types: [completed]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  conferir:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      SITE: ${{ vars.SITE_URL || 'https://nathansussaio.github.io/Dest-' }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Esperar o GitHub Pages atualizar
+        run: |
+          want=$(git log -1 --format=%H)
+          for i in $(seq 1 30); do
+            if curl -fsS "$SITE/sw.js" | grep -q "desti-${want::12}"; then echo "versão nova no ar"; exit 0; fi
+            sleep 10
+          done
+          echo "::warning::a versão nova ainda não apareceu; conferindo a que está no ar"
+      - name: Status de cada endereço
+        run: |
+          fail=0
+          check() { code=$(curl -s -o /tmp/p.html -w '%{http_code}' -L "$SITE/$1"); title=$(grep -o '<title>[^<]*' /tmp/p.html | head -1 | cut -c8-); echo "$code  /$1  ·  $title"; [ "$code" = "$2" ] || { echo "::error::/$1 respondeu $code (esperado $2)"; fail=1; }; }
+          check "" 200
+          for r in viagens/ viagens explorar/ gastos/ perfil/ nova-viagem/ entrar/ criar-conta/ "viagem/?id=t1_teste" "roteiro/?id=abcdefghijkl" "convite/?c=ABCDEFGH" privacidade.html termos.html og-image.png favicon.png manifest.json robots.txt sitemap.xml; do check "$r" 200; done
+          check "endereco-que-nao-existe" 404
+          # os arquivos do app (JavaScript) que a página pede existem
+          for js in $(curl -s "$SITE/viagens/" | grep -o '/[^"]*_expo/static/js/web/[^"]*\.js' | sort -u); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$(echo "$SITE" | grep -o '^https://[^/]*')$js"); echo "$code  $js"; [ "$code" = "200" ] || fail=1
+          done
+          exit $fail
+      - name: Testes de tela no endereço real (Chromium, Firefox e Safari)
+        run: |
+          mkdir -p /tmp/e2e && cp app/tests-e2e/smoke.mjs /tmp/e2e/
+          docker run --rm --ipc=host --network host -v /tmp/e2e:/e2e -w /e2e mcr.microsoft.com/playwright:v1.56.0-noble bash -c "
+            npm install --no-save --no-audit --no-fund playwright@1.56.0 > /dev/null &&
+            node smoke.mjs $SITE/"

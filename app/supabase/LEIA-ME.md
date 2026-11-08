@@ -42,6 +42,15 @@ Como funciona no app: em **Pessoas da viagem › Convidar para editar junto**, o
 
 Só quem participa da viagem consegue ler ou mudar a linha dela (regras de segurança no próprio banco). Quem criou pode tirar pessoas ou encerrar o grupo; quem participa fica com uma cópia.
 
+## Link público do roteiro (só leitura)
+
+Para ligar, rode uma vez o arquivo `schema-publico.sql` em **SQL Editor › New query › Run**. Ele cria:
+
+- `public_trips`: uma linha por link, com uma cópia do roteiro sem dados privados (sem gastos, reservas, nomes nem anotações);
+- a função `get_public_trip`, a única forma de ler um link: precisa do id exato, então ninguém consegue listar os links dos outros.
+
+Só quem tem conta cria links (até 100 por pessoa). O link se atualiza sozinho quando a viagem muda e pode ser desativado em Compartilhar roteiro.
+
 ## Onde ficam as viagens
 
 Cada pessoa tem uma linha na tabela `vaults`, com todas as viagens dela num único campo.

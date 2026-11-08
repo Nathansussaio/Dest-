@@ -1,5 +1,6 @@
 /* Peças compartilhadas entre telas: resumo de viagem, cartões de lugar e destino */
 import React from 'react';
+import { travelersOf } from '../lib/group';
 import { View, Pressable } from 'react-native';
 import type { Trip, Place, Destination } from '../types';
 import type { State } from '../store/store';
@@ -24,7 +25,7 @@ export function tripInfo(t: Trip, s: State) {
     period: periodLabel(t), periodShort: periodShort(t), style: styleLabel(t),
     paceLabel: (PACE_BY_ID[t.pace] || PACES[1]).label.toLowerCase(),
     coverSub: isMultiCity(t) ? t.legs!.map(legName).join(' → ') : t.country + ' · Estilo ' + styleLabel(t),
-    travelers: plural(t.travelers, 'viajante', 'viajantes'),
+    travelers: plural(travelersOf(t), 'viajante', 'viajantes'),
     actsLabel: plural(acts, 'atividade', 'atividades'),
     planPct: n ? Math.round((plannedDays / n) * 100) : 0,
     budgetPct: t.budget ? Math.min(100, (spent / t.budget) * 100) : 0, over: t.budget > 0 && spent > t.budget,

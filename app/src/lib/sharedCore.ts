@@ -24,6 +24,7 @@ export function toShared(p: LocalPart, myId: string): SharedPayload {
   const m = mapIds(p, 'me', 'u:' + myId);
   const trip: any = { ...m.trip };
   delete trip.shared;
+  delete trip.publicId;
   return {
     v: 1, trip,
     expenses: m.expenses.map((e) => ({ ...e, receipt: null })),
@@ -83,7 +84,7 @@ export function makeCode(n = 8): string {
 }
 export function cleanCode(s: string): string {
   const raw = String(s || '').trim();
-  const m = raw.match(/convite\/([A-Za-z0-9-]+)/);
+  const m = raw.match(/[?&]c=([A-Za-z0-9-]+)/) || raw.match(/convite\/([A-Za-z0-9-]+)/);
   return (m ? m[1] : raw).toUpperCase().replace(/[^A-Z0-9]/g, '');
 }
 export function newSharedId(): string { return 'g' + makeCode(14).toLowerCase(); }

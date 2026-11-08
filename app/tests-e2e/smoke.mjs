@@ -12,7 +12,8 @@ let falhas = 0;
 for (const [nome, tipo] of [['Chromium', chromium], ['Firefox', firefox], ['WebKit (Safari)', webkit]]) {
   for (const [w, h] of [[1366, 900], [390, 844]]) {
     const b = await tipo.launch();
-    const p = await b.newPage({ viewport: { width: w, height: h } });
+    const ctx = await b.newContext({ viewport: { width: w, height: h } });
+    const p = await ctx.newPage();
     p.setDefaultTimeout(15000); p.setDefaultNavigationTimeout(30000);
     const erros = [];
     p.on('pageerror', (e) => { if (!externo(e.message)) erros.push(e.message); });
@@ -31,18 +32,41 @@ for (const [nome, tipo] of [['Chromium', chromium], ['Firefox', firefox], ['WebK
         await p.getByText('Criar viagem', { exact: true }).last().click();
         await p.getByText('Usar este roteiro').first().waitFor({ timeout: 8000 });
       });
-      await passo('abrir o roteiro', async () => { await p.getByText('Usar este roteiro').first().click(); await p.waitForURL(/\/roteiro\/1$/, { timeout: 8000 }); });
-      await passo('botão Voltar do navegador', async () => { await p.goBack(); await p.waitForTimeout(800); if (!/\/viagem\//.test(p.url())) throw new Error('Voltar saiu da viagem: ' + p.url()); });
-      /* link direto aberto numa aba nova (como quem recebe o link): a página tem que abrir sem erro.
-         No modo visitante nada é salvo, então a viagem não existe na aba nova e o app volta para o começo. */
-      await passo('abrir link direto numa aba nova', async () => {
+      await passo('abrir o roteiro', async () => { await p.getByText('Usar este roteiro').first().click(); await p.waitForURL(/\/viagem\/\?id=[^&]+&tela=roteiro&dia=1$/, { timeout: 8000 }); });
+      await passo('botão Voltar do navegador', async () => { await p.goBack(); await p.waitForTimeout(800); if (!/\/viagem\/\?id=/.test(p.url()) || /tela=roteiro/.test(p.url())) throw new Error('Voltar não voltou para a viagem: ' + p.url()); });
+      /* visitante: a viagem fica salva neste navegador; abrir o link numa aba nova (mesmo navegador) mostra a viagem */
+      await passo('link da viagem numa aba nova mantém a viagem', async () => {
         const u = p.url();
-        const p2 = await b.newPage({ viewport: { width: w, height: h } });
+        const p2 = await p.context().newPage();
         const e2 = []; p2.on('pageerror', (e) => { if (!externo(e.message)) e2.push(e.message); });
-        await p2.goto(u);
-        await p2.getByText('Planeje viagens sem planilha.').first().waitFor({ timeout: 20000 });
+        const r = await p2.goto(u);
+        if (r && r.status() !== 200) throw new Error('status ' + r.status() + ' em ' + u);
+        await p2.getByText('Lisboa').first().waitFor({ timeout: 15000 });
+        if (!/\/viagem\/\?id=/.test(p2.url())) throw new Error('não ficou na viagem: ' + p2.url());
         if (e2.length) throw new Error('erros: ' + e2.slice(0, 2).join(' | '));
         await p2.close();
+      });
+      /* links diretos respondem 200 (como o GitHub Pages vai entregar) */
+      await passo('rotas diretas respondem 200', async () => {
+        for (const u of ['', 'viagens/', 'viagens', 'explorar/', 'gastos/', 'perfil/', 'nova-viagem/', 'entrar/', 'viagem/?id=t1_x', 'roteiro/?id=abcdefghijkl', 'convite/?c=ABCDEFGH']) {
+          const r = await p.request.get(base + u);
+          if (r.status() !== 200) throw new Error(u + ' respondeu ' + r.status());
+        }
+      });
+      await passo('endereço inexistente mostra "Página não encontrada"', async () => {
+        const p3 = await p.context().newPage();
+        await p3.goto(base + 'nao-existe-isto');
+        await p3.getByText('Página não encontrada').first().waitFor({ timeout: 15000 });
+        await p3.goto(base + 'viagem/?id=nao-existe');
+        await p3.getByText('Viagem não encontrada').first().waitFor({ timeout: 15000 });
+        await p3.close();
+      });
+      await passo('roteiro público inexistente mostra aviso (sem login)', async () => {
+        const c = await b.newContext({ viewport: { width: w, height: h } });
+        const p4 = await c.newPage();
+        await p4.goto(base + 'roteiro/?id=naoexiste12345');
+        await p4.getByText(/Roteiro não encontrado|Sem conexão/).first().waitFor({ timeout: 20000 });
+        await c.close();
       });
       if (erros.length) { falhas++; console.log('FALHOU [' + nome + ' ' + w + 'px] erros na página: ' + erros.slice(0, 3).join(' | ')); }
       else console.log('ok [' + nome + ' ' + w + 'px]');

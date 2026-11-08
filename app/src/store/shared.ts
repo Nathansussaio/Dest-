@@ -3,7 +3,8 @@
    - Mudou aqui: envia em ~1 segundo (só se ninguém gravou antes; se gravou, junta as duas versões e envia de novo).
    - Mudou em outro celular: o Supabase avisa na hora (tempo real) e, de reserva, o app confere a cada minuto. */
 import { getState, setState, subscribe, setDataHook, type State } from './store';
-import type { Trip, Member } from '../types';
+import type { Trip, Member, Expense } from '../types';
+import { tripMembers } from '../lib/group';
 import { cloudSharedList, cloudSharedCreate, cloudSharedPush, cloudCreateInvite, cloudJoinTrip, cloudLeaveTrip, cloudUnshareTrip, cloudWatchShared, type SharedRow } from '../lib/backend';
 import { toShared, fromShared, hashOf, mergeParts, makeCode, cleanCode, newSharedId, type LocalPart } from '../lib/sharedCore';
 
@@ -44,12 +45,15 @@ function dropPart(s: State, id: string): Partial<State> {
   return { trips, expenses: s.expenses.filter((e) => e.tripId !== id), reservations: s.reservations.filter((r) => r.tripId !== id), checklist, shareMeta: meta, tripId: s.tripId === id ? (trips[0] ? trips[0].id : null) : s.tripId };
 }
 /* a pessoa deste celular aparece na lista de quem vai (para dividir os gastos) */
-function withMe(t: Trip, owner: string): Trip {
-  const ms: Member[] = t.members && t.members.length ? t.members : [];
-  if (ms.some((m) => m.id === 'me')) return t;
+function withMe(t: Trip, owner: string, expenses: Expense[] = []): Trip {
+  const ms: Member[] = tripMembers(t);
+  if (ms.some((m) => m.id === 'me')) return { ...t, members: ms, travelers: ms.length };
   const me: Member = { id: 'me', name: myName(), status: owner === myId() ? 'owner' : 'ativo' };
-  const members = ms.concat([me]);
-  return { ...t, members, travelers: Math.max(t.travelers || 1, members.length) };
+  /* quem entra pelo convite ocupa o primeiro lugar reservado ("Viajante 2") que ainda não tem gastos */
+  const used = (id: string) => expenses.some((e) => (e.paidBy || 'me') === id || (e.split || []).indexOf(id) >= 0) || (t.settlements || []).some((x) => x.from === id || x.to === id);
+  const slot = ms.find((m) => m.placeholder && !used(m.id));
+  const members = slot ? ms.filter((m) => m.id !== slot.id).concat([me]) : ms.concat([me]);
+  return { ...t, members, travelers: members.length };
 }
 
 let toastFn: ((m: string) => void) | null = null;
@@ -83,10 +87,11 @@ function apply(row: SharedRow, me: string, base: LocalPart | null, merged?: Loca
     };
   }
   const code = local && local.trip.shared ? local.trip.shared.code : undefined;
-  next = { ...next, trip: { ...next.trip, id: row.id, shared: { owner: row.owner, ...(code ? { code } : {}) } } };
+  const pub = local ? local.trip.publicId : undefined;
+  next = { ...next, trip: { ...next.trip, id: row.id, shared: { owner: row.owner, ...(code ? { code } : {}) }, ...(pub ? { publicId: pub } : {}) } };
   /* resumo do que veio da nuvem: se o conteúdo deste celular ficar diferente, ele é enviado */
   const h = hashOf(toShared({ ...remote, trip: { ...remote.trip, id: row.id } }, me));
-  next = { ...next, trip: withMe(next.trip, row.owner) };
+  next = { ...next, trip: withMe(next.trip, row.owner, next.expenses) };
   applying = true;
   try {
     setState((s) => ({ ...putPart(s, next), shareMeta: { ...s.shareMeta, [row.id]: { h, at: row.updated_at } } }));
@@ -153,7 +158,7 @@ export async function shareTrip(tripId: string): Promise<string | null> {
   if (!base) return 'Viagem não encontrada.';
   if (base.trip.shared) return null;
   const id = newSharedId(), code = makeCode();
-  const trip = withMe({ ...base.trip, id }, me);
+  const trip = withMe({ ...base.trip, id }, me, base.expenses);
   const part: LocalPart = {
     trip, expenses: base.expenses.map((e) => ({ ...e, tripId: id })), reservations: base.reservations.map((r) => ({ ...r, tripId: id })), checklist: base.checklist
   };
@@ -164,7 +169,7 @@ export async function shareTrip(tripId: string): Promise<string | null> {
   /* o que mudou enquanto criava: pega a versão mais nova deste celular */
   const now = partOf(S(), tripId) || base;
   const latest: LocalPart = {
-    trip: withMe({ ...now.trip, id, shared: { owner: me, code } }, me),
+    trip: withMe({ ...now.trip, id, shared: { owner: me, code } }, me, now.expenses),
     expenses: now.expenses.map((e) => ({ ...e, tripId: id })), reservations: now.reservations.map((x) => ({ ...x, tripId: id })), checklist: now.checklist
   };
   applying = true;

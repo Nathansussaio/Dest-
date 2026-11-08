@@ -1,11 +1,12 @@
 /* Texto e página para compartilhar o roteiro (sem códigos de reserva) */
 import type { Trip, Reservation } from '../types';
+import { travelersOf } from './group';
 import { PLACE_BY_ID } from '../data';
 import { parseD, addDays, SEM, SEM_LONGO, MES, MES_LONGO, plural, fmtShort } from './format';
 import { periodLabel, isMultiCity, legNameOfDay, sortItems, itemName } from './trip';
 
 export function shareText(t: Trip, reservations: Reservation[]): string {
-  const lines = ['Destí · ' + t.name + (t.country ? ', ' + t.country : ''), periodLabel(t) + ' · ' + plural(t.days.length, 'dia', 'dias') + ' · ' + plural(t.travelers, 'viajante', 'viajantes'), ''];
+  const lines = ['Destí · ' + t.name + (t.country ? ', ' + t.country : ''), periodLabel(t) + ' · ' + plural(t.days.length, 'dia', 'dias') + ' · ' + plural(travelersOf(t), 'viajante', 'viajantes'), ''];
   t.days.forEach((d, i) => {
     const dt = addDays(parseD(t.start), i);
     lines.push('Dia ' + (i + 1) + ' · ' + SEM[dt.getDay()] + ', ' + dt.getDate() + ' ' + MES[dt.getMonth()] + (isMultiCity(t) ? ' · ' + legNameOfDay(t, i) : ''));
@@ -30,9 +31,10 @@ export function shareText(t: Trip, reservations: Reservation[]): string {
 export function shareHtml(t: Trip): string {
   const esc = (x: string) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as Record<string, string>)[c]);
   const h = ['<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>' + esc('Roteiro · ' + t.name) + '</title>',
-    '<style>body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;max-width:720px;margin:32px auto;padding:0 20px;color:#1B1C1E;line-height:1.45}h1{margin:0 0 4px;font-size:30px}h2{font-size:16px;margin:22px 0 6px;padding-bottom:4px;border-bottom:1px solid #DDD}ul{list-style:none;padding:0;margin:0}li{padding:3px 0}b{display:inline-block;width:58px}.m{color:#5F6166}@media print{body{margin:0}}</style></head><body>',
+    '<style>body{font-family:-apple-system,"Segoe UI",Roboto,sans-serif;max-width:720px;margin:32px auto;padding:0 20px;color:#1B1C1E;line-height:1.45}h1{margin:0 0 4px;font-size:30px}.brand{display:flex;align-items:center;gap:8px;color:#0B6670;font-weight:700;font-size:15px;letter-spacing:.2px;border-bottom:3px solid #0B6670;padding-bottom:8px;margin-bottom:18px}.brand i{display:inline-block;width:18px;height:18px;border-radius:5px;background:#0B6670}h2{font-size:16px;margin:22px 0 6px;padding-bottom:4px;border-bottom:1px solid #DDD}ul{list-style:none;padding:0;margin:0}li{padding:3px 0}b{display:inline-block;width:58px}.m{color:#5F6166}@media print{body{margin:0}}</style></head><body>',
+    '<div class="brand"><i></i>Destí · roteiro de viagem</div>',
     '<h1>' + esc(t.name + (t.country ? ', ' + t.country : '')) + '</h1>',
-    '<p class="m">' + esc(periodLabel(t) + ' · ' + plural(t.days.length, 'dia', 'dias') + ' · ' + plural(t.travelers, 'viajante', 'viajantes')) + '</p>'];
+    '<p class="m">' + esc(periodLabel(t) + ' · ' + plural(t.days.length, 'dia', 'dias') + ' · ' + plural(travelersOf(t), 'viajante', 'viajantes')) + '</p>'];
   t.days.forEach((d, i) => {
     const dt = addDays(parseD(t.start), i);
     h.push('<h2>' + esc('Dia ' + (i + 1) + ' · ' + SEM_LONGO[dt.getDay()] + ', ' + dt.getDate() + ' de ' + MES_LONGO[dt.getMonth()] + (isMultiCity(t) ? ' · ' + legNameOfDay(t, i) : '')) + '</h2><ul>');

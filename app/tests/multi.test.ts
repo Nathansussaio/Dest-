@@ -38,11 +38,25 @@ test('deslocamento entre cidades: rotas conhecidas, estimativa e links', () => {
   const g = intercity('floripa', 'gramado'); assert.ok(g.options.some((o) => o.mode === 'onibus') && g.options.some((o) => o.mode === 'carro'));
 });
 
-import { makeBackup, parseBackup } from '../src/lib/backupCore';
+import { makeBackup, parseBackup, mergeAccountData } from '../src/lib/backupCore';
 test('backup em arquivo: gera e confere', () => {
-  const data: any = { trips: [{ id: 'x', name: 'Paris' }], expenses: [], reservations: [], checklist: {}, saved: [], savedDest: [], chat: [], prefs: {}, sec: {}, dishDone: {}, alertsRead: [] };
+  const data: any = { trips: [{ id: 'x', name: 'Paris', start: '2026-12-01', end: '2026-12-03', days: [[], [], []] }], expenses: [{ id: 'e1', tripId: 'x', amount: 10 }], reservations: [], checklist: {}, saved: [], savedDest: [], chat: [], prefs: {}, sec: {}, dishDone: {}, alertsRead: [] };
   const r: any = parseBackup(makeBackup(data));
   assert.equal(r.data.trips[0].name, 'Paris');
   assert.ok('error' in parseBackup('{"a":1}'));
   assert.ok('error' in parseBackup('não é json'));
+  /* backup corrompido: avisa e diz que nada foi alterado */
+  const bad: any = parseBackup('{"app":"desti","version":1,"data":{"trips":[{"name":"sem id"}]}}');
+  assert.ok('error' in bad && /Nada foi alterado/.test(bad.error));
+});
+
+test('restaurar juntando: nada é apagado e viagem repetida não duplica', () => {
+  const base: any = { trips: [{ id: 'a', name: 'Lisboa' }], expenses: [{ id: 'e1', tripId: 'a' }], reservations: [], checklist: { a: [] }, saved: ['l1'], savedDest: [], chat: [], prefs: {}, sec: {}, dishDone: {}, alertsRead: [] };
+  const add: any = { trips: [{ id: 'a', name: 'Lisboa (velha)' }, { id: 'b', name: 'Roma' }], expenses: [{ id: 'e2', tripId: 'a' }, { id: 'e3', tripId: 'b' }], reservations: [{ id: 'r1', tripId: 'b' }], checklist: { b: [{ id: 'c' }] }, saved: ['l1', 'l2'], savedDest: [] };
+  const r = mergeAccountData(base, add);
+  assert.deepEqual(r.data.trips.map((t: any) => t.name), ['Lisboa', 'Roma']);
+  assert.deepEqual(r.data.expenses.map((e: any) => e.id), ['e1', 'e3']);
+  assert.equal(r.data.reservations.length, 1);
+  assert.deepEqual(r.data.saved, ['l1', 'l2']);
+  assert.equal(r.added, 1); assert.equal(r.skipped, 1);
 });

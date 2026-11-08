@@ -359,6 +359,7 @@ export function Profile() {
   const u = s.user!;
   const guest = u.method === 'guest';
   const nTrips = s.trips.length, nPlaces = s.saved.length;
+  const [exit, setExit] = useState(false);
   return (
     <Screen>
       <TopBar large title="Perfil" />
@@ -367,7 +368,7 @@ export function Profile() {
           <Avatar letter={u.name.charAt(0).toUpperCase()} size={56} />
           <Grow>
             <T v="h2" lines={1}>{u.name}</T>
-            <T v="smallMuted" lines={1}>{guest ? 'Modo visitante · nada é salvo' : u.email}</T>
+            <T v="smallMuted" lines={1}>{guest ? 'Modo visitante · salvo só neste aparelho' : u.email}</T>
           </Grow>
         </Row>
         <Row gap={10} style={{ marginTop: 14 }}>
@@ -378,9 +379,9 @@ export function Profile() {
       </Card>
       {guest ? (
         <Card style={{ padding: 16, marginTop: 14, gap: 8, backgroundColor: c.accTint }}>
-          <T v="lt">Guarde suas viagens</T>
-          <T v="small">Crie uma conta: o que você montou agora vem junto.</T>
-          <Btn sm label="Criar conta" onPress={A.guestToSignup} />
+          <T v="lt">Suas viagens estão só neste aparelho</T>
+          <T v="small">No modo visitante, as viagens ficam salvas apenas neste navegador e não são sincronizadas. Crie uma conta para sincronizar e compartilhar seus dados: o que você montou vem junto.</T>
+          <Row gap={10} style={{ flexWrap: 'wrap' }}><Btn sm label="Criar conta" onPress={A.guestToSignup} /><Btn sm kind="secondary" label="Já tenho conta" onPress={A.guestToLogin} /></Row>
         </Card>
       ) : null}
 
@@ -413,18 +414,30 @@ export function Profile() {
         </>
       ) : null}
 
+      <GroupLabel>Onde ficam seus dados</GroupLabel>
+      <List>
+        <ListRow icon={u.id ? 'refresh' : 'download'} title={guest ? 'Só neste aparelho' : u.id ? 'Na sua conta (nuvem)' : 'Neste aparelho'}
+          sub={guest ? 'Modo visitante: não sincroniza nem aparece em outro celular' : u.id ? 'Sincroniza entre aparelhos; há também uma cópia aqui para usar sem internet' : 'Conta deste aparelho: não sincroniza com outros'} />
+      </List>
       <GroupLabel>Backup</GroupLabel>
       <List>
         {u.id ? <ListRow icon="refresh" title="Sincronizar com a conta agora" sub={s.syncState === 'offline' ? 'Última tentativa falhou: ' + (cloudLastError() || 'sem conexão') : s.syncState === 'pending' ? 'Enviando mudanças…' : 'Tudo salvo na sua conta'} chevron onPress={A.syncNow} /> : null}
         <ListRow icon="download" title="Baixar backup das viagens" sub="Um arquivo com viagens, gastos e reservas" chevron onPress={A.exportBackup} />
-        <ListRow icon="refresh" title="Restaurar de um backup" sub="Substitui os dados deste aparelho (dá para desfazer)" chevron onPress={A.importBackup} />
+        <ListRow icon="refresh" title="Restaurar de um backup" sub="Escolha entre juntar com as viagens atuais ou substituir" chevron onPress={A.importBackup} />
       </List>
       <Gap h={18} />
       <GroupLabel>Conta</GroupLabel>
       <List>
-        <ListRow icon="logout" title={guest ? 'Sair do modo visitante' : 'Sair da conta'} onPress={A.logout} />
+        <ListRow icon="logout" title={guest ? 'Sair do modo visitante' : 'Sair da conta'} onPress={guest ? () => setExit(true) : A.logout} />
         {!guest ? <ListRow icon="trash" title="Excluir conta" color={c.errText} onPress={() => A.openSheet('delete', 'account')} /> : null}
       </List>
+      {exit ? (
+        <Card style={{ padding: 14, marginTop: 10, gap: 8 }}>
+          <T v="lt">Sair do modo visitante?</T>
+          <T v="smallMuted">{(nTrips === 1 ? 'Sua viagem continua salva neste navegador e volta' : nTrips ? 'Suas ' + nTrips + ' viagens continuam salvas neste navegador e voltam' : 'O que você salvar continua neste navegador e volta') + ' quando você entrar como visitante de novo. Nada vai para uma conta. Para não perder nada, crie uma conta ou baixe um backup antes.'}</T>
+          <Row gap={10} style={{ flexWrap: 'wrap' }}><Btn sm kind="secondary" label="Ficar" onPress={() => setExit(false)} /><Btn sm label="Criar conta" onPress={A.guestToSignup} /><Btn sm kind="ghost" label="Sair mesmo assim" onPress={() => { setExit(false); A.logout(); }} /></Row>
+        </Card>
+      ) : null}
       <Gap h={18} />
       <GroupLabel>Sobre</GroupLabel>
       <List>
@@ -435,7 +448,7 @@ export function Profile() {
       <Gap h={18} />
       </>} />
       <Gap h={18} />
-      <T v="smallMuted" center>{'Destí 1.0 · ' + (guest ? 'modo visitante: nada é salvo' : u.id ? (s.syncState === 'offline' ? 'não foi possível falar com a nuvem: ' + (cloudLastError() || 'sem conexão') : 'viagens guardadas na sua conta') : 'viagens guardadas neste aparelho')}</T>
+      <T v="smallMuted" center>{'Destí 1.0 · ' + (guest ? 'modo visitante: salvo só neste aparelho, sem sincronizar' : u.id ? (s.syncState === 'offline' ? 'não foi possível falar com a nuvem: ' + (cloudLastError() || 'sem conexão') : 'viagens guardadas na sua conta') : 'viagens guardadas neste aparelho')}</T>
     </Screen>
   );
 }

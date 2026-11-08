@@ -46,4 +46,5 @@ test('código do convite', () => {
   assert.match(c, /^[A-HJ-NP-Z2-9]{8}$/);
   assert.equal(cleanCode(' k7m2-qx9p '), 'K7M2QX9P');
   assert.equal(cleanCode('https://destiapp.com.br/convite/K7M2QX9P'), 'K7M2QX9P');
+  assert.equal(cleanCode('https://destiapp.com.br/convite/?c=K7M2QX9P'), 'K7M2QX9P');
 });

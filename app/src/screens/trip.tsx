@@ -28,7 +28,7 @@ import { rankCandidates, slotOfTime } from '../lib/generator';
 import { intercity, intercityShort, MODE_ICON } from '../lib/intercity';
 import { transitLeg } from '../lib/transit';
 import { tripClimate } from '../lib/climate';
-import { tripMembers, groupBalances, settleUp, memberName } from '../lib/group';
+import { tripMembers, groupBalances, settleUp, memberName, travelersOf } from '../lib/group';
 import {
   iso, today0, parseD, addDays, countDays, diffDays, plural, fmtMoney, brl, money, cap, norm, fmtShort,
   SEM, SEM_LONGO, MES, MES_LONGO, maskToValue
@@ -559,7 +559,7 @@ export function Created() {
         ) : (
           <Card style={{ padding: 20, gap: 8 }}>
             <T v="lt">{noCatalog ? 'Roteiro começa em branco' : 'Seu roteiro está pronto para montar'}</T>
-            <T v="muted">{noCatalog ? 'Ainda não temos catálogo de lugares para ' + t.name + '. Adicione suas próprias atividades no roteiro.' : 'Adicione lugares do catálogo dia a dia.'}</T>
+            <T v="muted">{noCatalog ? 'A viagem foi salva, mas ainda não temos catálogo de lugares para ' + t.name + ' para montar o roteiro sozinho. Adicione suas próprias atividades em cada dia.' : 'Adicione lugares do catálogo dia a dia.'}</T>
           </Card>
         )}
       </Screen>
@@ -590,7 +590,7 @@ export function Created() {
       ) : (
         <Card style={{ padding: 16, gap: 10 }}>
           <T v="lt">{noCatalog ? 'Roteiro começa em branco' : 'Seu roteiro está pronto para montar'}</T>
-          <T v="muted">{noCatalog ? 'Ainda não temos catálogo de lugares para ' + t.name + '. Adicione suas próprias atividades no roteiro.' : 'Adicione lugares do catálogo dia a dia.'}</T>
+          <T v="muted">{noCatalog ? 'A viagem foi salva, mas ainda não temos catálogo de lugares para ' + t.name + ' para montar o roteiro sozinho. Adicione suas próprias atividades em cada dia.' : 'Adicione lugares do catálogo dia a dia.'}</T>
           <Btn label="Ver viagem" block onPress={() => setState({ screen: 'trip', history: ['home'], tripId: t.id })} />
         </Card>
       )}
@@ -629,7 +629,7 @@ export function TripScreen() {
   const done = s.dishDone[t.id] || [];
   const dishTotal = dishCities.reduce((a, x) => a + DISHES[x].length, 0);
   const firstCity = legName(tripLegs(t)[0]);
-  const hotelUrl = 'https://www.booking.com/searchresults.html?ss=' + encodeURIComponent(firstCity) + '&checkin=' + t.start + '&checkout=' + t.end + '&group_adults=' + t.travelers + (BOOKING_AFFILIATE_ID ? '&aid=' + BOOKING_AFFILIATE_ID : '');
+  const hotelUrl = 'https://www.booking.com/searchresults.html?ss=' + encodeURIComponent(firstCity) + '&checkin=' + t.start + '&checkout=' + t.end + '&group_adults=' + travelersOf(t) + (BOOKING_AFFILIATE_ID ? '&aid=' + BOOKING_AFFILIATE_ID : '');
   /* viagens com várias paradas: datas, clima e hotel de cada cidade */
   const legInfo = (() => {
     let acc = 0;
@@ -639,7 +639,7 @@ export function TripScreen() {
       const a = iso(addDays(parseD(t.start), from)), b = iso(addDays(parseD(t.start), from + L.days - 1));
       const co = k < all.length - 1 ? iso(addDays(parseD(b), 1)) : t.end;
       const cl = tripClimate({ destId: L.destId, start: a, end: b, styles: t.styles });
-      const url = 'https://www.booking.com/searchresults.html?ss=' + encodeURIComponent(legName(L)) + '&checkin=' + a + '&checkout=' + (co > a ? co : iso(addDays(parseD(a), 1))) + '&group_adults=' + t.travelers + (BOOKING_AFFILIATE_ID ? '&aid=' + BOOKING_AFFILIATE_ID : '');
+      const url = 'https://www.booking.com/searchresults.html?ss=' + encodeURIComponent(legName(L)) + '&checkin=' + a + '&checkout=' + (co > a ? co : iso(addDays(parseD(a), 1))) + '&group_adults=' + travelersOf(t) + (BOOKING_AFFILIATE_ID ? '&aid=' + BOOKING_AFFILIATE_ID : '');
       return { L, a, b, co, cl, url };
     });
   })();
@@ -668,7 +668,7 @@ export function TripScreen() {
       </Cover>
       <View style={{ paddingHorizontal: pad, marginTop: -24, maxWidth: site ? SITE_MAX : 800, width: '100%', alignSelf: 'center' }}>
         <Card style={{ flexDirection: 'row', padding: 14 }}>
-          {[['Período', v.periodShort], ['Duração', v.n + ' dias'], ['Viajantes', String(t.travelers)]].map((x, i) => (
+          {[['Período', v.periodShort], ['Duração', v.n + ' dias'], ['Viajantes', String(travelersOf(t))]].map((x, i) => (
             <View key={x[0]} style={{ flex: 1, borderLeftWidth: i ? 1 : 0, borderLeftColor: c.line, paddingLeft: i ? 12 : 0 }}>
               <T v="smallMuted">{x[0]}</T><T v="lt" lines={1}>{x[1]}</T>
             </View>
@@ -832,9 +832,9 @@ export function TripScreen() {
           {multiLegs ? legInfo.map((x, k) => (
             <View key={'h' + k}>
               {k ? <Line /> : null}
-              <ListRow iconEl={<TileIcon name="bed" />} title={'Hotéis em ' + legName(x.L)} sub={fmtShort(x.a) + ' a ' + fmtShort(x.co) + ' · ' + plural(t.travelers, 'adulto', 'adultos') + ' · link de parceiro'} chevron onPress={() => Linking.openURL(x.url).catch(() => {})} />
+              <ListRow iconEl={<TileIcon name="bed" />} title={'Hotéis em ' + legName(x.L)} sub={fmtShort(x.a) + ' a ' + fmtShort(x.co) + ' · ' + plural(travelersOf(t), 'adulto', 'adultos') + ' · link de parceiro'} chevron onPress={() => Linking.openURL(x.url).catch(() => {})} />
             </View>
-          )) : <ListRow iconEl={<TileIcon name="bed" />} title={'Hotéis em ' + firstCity} sub={periodShort(t) + ' · ' + plural(t.travelers, 'adulto', 'adultos') + ' · link de parceiro'} chevron onPress={() => Linking.openURL(hotelUrl).catch(() => {})} />}
+          )) : <ListRow iconEl={<TileIcon name="bed" />} title={'Hotéis em ' + firstCity} sub={periodShort(t) + ' · ' + plural(travelersOf(t), 'adulto', 'adultos') + ' · link de parceiro'} chevron onPress={() => Linking.openURL(hotelUrl).catch(() => {})} />}
         </Card>
         <T v="smallMuted" center style={{ marginTop: 10 }}>Links de parceiros: o Destí pode receber comissão, sem custo a mais para você.</T>
         </View>} />

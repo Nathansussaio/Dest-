@@ -11,17 +11,19 @@ import { radius, isIOS } from '../theme/theme';
 import { BUDGET_CATS, CUR_SYMBOL, DEMO_RATES, STYLES, STYLE_INFO, PACES, RES_TYPES, DESTINATIONS, searchDest, continentOf, countryOf } from '../data';
 import type { Expense, Reservation, Style, PaceId } from '../types';
 import { tripCurrency, tripLegs, legName } from '../lib/trip';
-import { tripMembers, memberName } from '../lib/group';
+import { tripMembers, memberName, travelersOf } from '../lib/group';
 import { shareText, shareHtml } from '../lib/share';
 import { passRules } from '../lib/auth';
 import { copyText, shareTextNative, sharePdf } from '../lib/device';
 import { SITE_URL, CLOUD_ENABLED } from '../config';
 import { useFx } from '../lib/fx';
+import * as P from '../store/publicLinks';
+import { toBRL, parseDecimalBR, type Cur } from '../lib/expenseCore';
 import { fmtMoney, money, maskToValue, plural, countDays, iso, addDays, parseD, norm, today0 } from '../lib/format';
 
 const TITLES: Record<string, string> = {
   editTrip: 'Editar viagem', people: 'Pessoas da viagem', share: 'Compartilhar roteiro',
-  password: 'Alterar senha', delete: 'Excluir conta', resForm: 'Reserva', join: 'Entrar numa viagem'
+  password: 'Alterar senha', delete: 'Excluir conta', resForm: 'Reserva', join: 'Entrar numa viagem', restore: 'Restaurar backup'
 };
 
 export function SheetHost() {
@@ -52,6 +54,7 @@ export function SheetHost() {
             {s.sheet === 'delete' ? <DeleteSheet /> : null}
             {s.sheet === 'resForm' ? <ResSheet arg={arg} /> : null}
             {s.sheet === 'join' ? <JoinSheet arg={arg} /> : null}
+            {s.sheet === 'restore' ? <RestoreSheet arg={arg} /> : null}
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -66,7 +69,9 @@ function ExpenseSheet({ arg }: { arg: { mode?: 'manual' | 'scan' | 'edit'; exp?:
   const t = A.currentTrip()!;
   const e = arg.exp;
   const members = tripMembers(t), group = members.length > 1;
-  const cur0 = e && e.orig ? e.orig.currency : tripCurrency(t, s.day);
+  /* gasto novo começa sempre em reais (o orçamento é em reais); € e US$ só quando a pessoa escolher */
+  const cur0 = e && e.orig ? e.orig.currency : 'BRL';
+  const localCur = tripCurrency(t, s.day);
   const [amount, setAmount] = useState(e ? String(e.orig ? e.orig.value : e.amount) : '');
   const [currency, setCurrency] = useState<string>(cur0);
   /* cotação do dia (a mesma do topo do site); sem internet, a última guardada; sem nenhuma, um valor de referência */
@@ -87,8 +92,9 @@ function ExpenseSheet({ arg }: { arg: { mode?: 'manual' | 'scan' | 'edit'; exp?:
   const [paidBy, setPaidBy] = useState(e ? e.paidBy || 'me' : 'me');
   const [split, setSplit] = useState<string[]>(e && e.split ? e.split : members.map((m) => m.id));
   const [err, setErr] = useState<Record<string, string>>({});
-  const val = Number(amount), r = Number(String(rate).replace(',', '.'));
-  const brlV = currency === 'BRL' ? val : val * r;
+  const val = Number(amount), r = parseDecimalBR(rate);
+  const conv = toBRL(amount, currency as Cur, rate);
+  const brlV = conv.ok ? conv.brl : 0;
   const pickReceipt = async () => {
     try {
       const res = await ImagePicker.launchImageLibraryAsync({ quality: 0.6 });
@@ -107,12 +113,13 @@ function ExpenseSheet({ arg }: { arg: { mode?: 'manual' | 'scan' | 'edit'; exp?:
       <Field label="Valor" error={err.amount}>
         <Seg value={currency} onChange={(v) => { setCurrency(v); if (v !== 'BRL' && (!rateTouched || !rate)) { setRate(rateFor(v)); setRateTouched(false); } }} options={['BRL', 'EUR', 'USD'].map((k) => ({ id: k, label: CUR_SYMBOL[k] }))} />
         <Gap h={8} />
-        <Input prefix={CUR_SYMBOL[currency]} value={amount ? fmtMoney(val) : ''} onChangeText={(v) => setAmount(maskToValue(v, 10))} keyboard="number-pad" placeholder="0,00" error={!!err.amount} />
+        <Input prefix={CUR_SYMBOL[currency]} value={amount ? fmtMoney(val) : ''} onChangeText={(v) => setAmount(maskToValue(v, 10))} keyboard="number-pad" placeholder="0,00" error={!!err.amount} label={'Valor em ' + (currency === 'BRL' ? 'reais' : currency === 'EUR' ? 'euros' : 'dólares')} />
+        {currency === 'BRL' && localCur !== 'BRL' && !e ? <T v="smallMuted" style={{ marginTop: 6 }}>{'Pagou em ' + (localCur === 'EUR' ? 'euro' : 'dólar') + '? Toque em ' + CUR_SYMBOL[localCur] + ' acima para converter pela cotação.'}</T> : null}
       </Field>
       {currency !== 'BRL' ? (
         <Field label={'Cotação: R$ por 1 ' + CUR_SYMBOL[currency]} error={err.rate}>
           <Input value={rate} onChangeText={(v) => { setRateTouched(true); setRate(v.replace(/[^0-9.,]/g, '')); }} keyboard="decimal-pad" placeholder="6,20" error={!!err.rate} />
-          {val > 0 && r > 0 ? <T v="smallMuted" style={{ marginTop: 6 }}>{'≈ ' + money(val * r) + ' no orçamento'}</T> : null}
+
           {(() => {
             const lv = liveRate(currency);
             if (!lv) return <T v="smallMuted" style={{ marginTop: 4 }}>Não deu para buscar a cotação de hoje. Confira o valor (o banco ou o cartão mostram a cotação usada).</T>;
@@ -148,7 +155,15 @@ function ExpenseSheet({ arg }: { arg: { mode?: 'manual' | 'scan' | 'edit'; exp?:
           </Row>
         ) : <Btn sm kind="secondary" icon="camera" label="Anexar foto da nota" onPress={pickReceipt} />}
       </Field>
-      <Btn label={e ? 'Salvar alterações' : 'Registrar gasto'} block onPress={save} />
+      {/* resumo antes de registrar: valor original e quanto entra no orçamento */}
+      {conv.ok ? (
+        <Card flat label="Resumo do gasto" style={{ padding: 12, marginBottom: 12, gap: 2 }}>
+          <T v="smallMuted">Vai entrar no orçamento</T>
+          <T v="h2">{money(conv.brl)}</T>
+          {conv.orig ? <T v="smallMuted">{CUR_SYMBOL[conv.orig.currency] + ' ' + fmtMoney(conv.orig.value) + ' × R$ ' + fmtRateBr(conv.orig.rate) + ' (cotação usada)'}</T> : <T v="smallMuted">Valor em reais, sem conversão</T>}
+        </Card>
+      ) : null}
+      <Btn label={(e ? 'Salvar ' : 'Registrar ') + (conv.ok ? money(conv.brl) : 'gasto')} block onPress={save} />
       {e ? <><Gap h={8} /><Btn kind="ghost" label="Excluir gasto" color={c.errText} block onPress={() => A.removeExpense(e.id)} /></> : null}
     </View>
   );
@@ -160,7 +175,7 @@ function EditTripSheet() {
   const t = A.currentTrip()!;
   const [start, setStart] = useState(t.start);
   const [end, setEnd] = useState(t.end);
-  const [travelers, setTrav] = useState(t.travelers);
+  const [travelers, setTrav] = useState(travelersOf(t));
   const [budget, setBudget] = useState(t.budget ? String(t.budget) : '');
   const [styles, setStyles] = useState<Style[]>(t.styles.slice());
   const [pace, setPace] = useState<PaceId>(t.pace || 'equilibrado');
@@ -225,12 +240,13 @@ function EditTripSheet() {
         {stops.length < 10 ? <View style={{ alignItems: 'flex-start', marginTop: 6 }}><LinkBtn label="+ Adicionar parada (cidade ou país)" onPress={addStop} /></View> : null}
         <T v="smallMuted">Os dias que você já montou continuam na mesma cidade. Dias novos são montados automaticamente.</T>
       </Field>
-      <Field label="Viajantes">
+      <Field label="Viajantes" error={err.travelers}>
         <Row gap={14}>
           <IconBtn icon="minus" label="Menos um viajante" onPress={() => setTrav(Math.max(1, travelers - 1))} />
           <T v="lt">{plural(travelers, 'viajante', 'viajantes')}</T>
           <IconBtn icon="plus" label="Mais um viajante" onPress={() => setTrav(Math.min(20, travelers + 1))} />
         </Row>
+        <T v="smallMuted" style={{ marginTop: 4 }}>É a mesma lista de Pessoas da viagem: quem ainda não tem nome aparece como "Viajante 2", "Viajante 3"…</T>
       </Field>
       <Field label="Orçamento total (opcional)" error={err.budget}><Input prefix="R$" placeholder="Sem orçamento" value={Number(budget) ? fmtMoney(Number(budget)) : ''} onChangeText={(v) => setBudget(maskToValue(v))} keyboard="number-pad" error={!!err.budget} /></Field>
       <Field label="Estilo" error={err.styles}><Picklist label="Estilo" placeholder="Escolha até 2 estilos" error={!!err.styles} options={STYLES.map((st) => ({ id: st, label: st, icon: STYLE_INFO[st].icon, hint: STYLE_INFO[st].short }))} value={styles} onToggle={(id) => toggle(id as any)} /></Field>
@@ -251,29 +267,51 @@ function EditTripSheet() {
 /* ---------- Pessoas da viagem ---------- */
 function PeopleSheet() {
   const s = useApp();
+  const { c } = useTheme();
   const t = A.currentTrip()!;
   const [name, setName] = useState('');
   const [err, setErr] = useState<Record<string, string>>({});
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState('');
+  const [editErr, setEditErr] = useState('');
   const ms = tripMembers(t);
+  const slots = ms.filter((m) => m.placeholder).length;
   const label = (id: string) => (id === 'me' ? (s.user && s.user.name) || 'Você' : memberName(t, id));
   const add = () => { const e = A.invite(name); setErr(e); if (!Object.keys(e).length) setName(''); };
+  const saveName = (id: string) => { const e = A.renameMember(id, draft); setEditErr(e || ''); if (!e) setEditing(null); };
   return (
     <View>
       <GroupBox />
       <T v="title" style={{ marginTop: 20, marginBottom: 6 }}>Quem vai</T>
-      <T v="smallMuted" style={{ marginBottom: 12 }}>{t.name + ' · ' + plural(ms.length, 'pessoa', 'pessoas') + '. Gastos sem divisão definida são divididos entre todos.'}</T>
+      <T v="smallMuted" style={{ marginBottom: 12 }}>{t.name + ' · ' + plural(ms.length, 'pessoa', 'pessoas') + ' na divisão dos gastos. Gastos sem divisão definida são divididos entre todos.' + (slots ? ' Toque no lápis para pôr o nome de quem ainda aparece como "Viajante".' : '')}</T>
       <Card style={{ overflow: 'hidden' }}>
-        {ms.map((m, i) => (
-          <View key={m.id}>
-            {i ? <Divider /> : null}
-            <ListRow iconEl={<Avatar size={38} letter={label(m.id).charAt(0).toUpperCase()} />} title={m.id === 'me' ? label('me') + ' (você)' : m.name}
-              sub={m.status === 'owner' ? (t.shared ? 'Criou a viagem · edita pelo próprio celular' : 'Organizador') : m.id === 'me' || /^u:/.test(m.id) ? 'Edita a viagem pelo próprio celular' : 'Participa da divisão dos gastos'}
-              right={m.id === 'me' || (/^u:/.test(m.id) && !(t.shared && s.user && t.shared.owner === s.user.id)) ? undefined : <IconBtn icon="x" flat size={36} label={'Remover ' + m.name} onPress={() => A.removeMember(m.id)} />} />
-          </View>
-        ))}
+        {ms.map((m, i) => {
+          const canRename = m.id !== 'me' && !/^u:/.test(m.id);
+          const canRemove = m.id !== 'me' && (!/^u:/.test(m.id) || !!(t.shared && s.user && t.shared.owner === s.user.id));
+          if (editing === m.id) {
+            return (
+              <View key={m.id} style={{ padding: 12, gap: 8 }}>
+                {i ? <Divider /> : null}
+                <Field label={'Nome de ' + m.name} error={editErr}><Input value={draft} onChangeText={setDraft} placeholder="Nome" caps="words" error={!!editErr} onSubmit={() => saveName(m.id)} /></Field>
+                <Row gap={10}><Btn grow kind="secondary" label="Cancelar" onPress={() => { setEditing(null); setEditErr(''); }} /><Btn grow label="Salvar nome" onPress={() => saveName(m.id)} /></Row>
+              </View>
+            );
+          }
+          return (
+            <View key={m.id}>
+              {i ? <Divider /> : null}
+              <ListRow iconEl={<Avatar size={38} letter={label(m.id).charAt(0).toUpperCase()} />} title={m.id === 'me' ? label('me') + ' (você)' : m.name}
+                sub={m.placeholder ? 'Sem nome ainda · participa da divisão' : m.status === 'owner' ? (t.shared ? 'Criou a viagem · edita pelo próprio celular' : 'Organizador') : m.id === 'me' || /^u:/.test(m.id) ? 'Edita a viagem pelo próprio celular' : 'Participa da divisão dos gastos'}
+                right={<Row gap={2}>
+                  {canRename ? <IconBtn icon="edit" flat size={36} label={'Mudar o nome de ' + m.name} onPress={() => { setEditing(m.id); setDraft(m.placeholder ? '' : m.name); setEditErr(''); }} /> : null}
+                  {canRemove ? <IconBtn icon="x" flat size={36} label={'Remover ' + m.name} onPress={() => A.removeMember(m.id)} /> : null}
+                </Row>} />
+            </View>
+          );
+        })}
       </Card>
-      <T v="title" style={{ marginTop: 20, marginBottom: 6 }}>Adicionar só pelo nome</T>
-      <T v="smallMuted" style={{ marginBottom: 10 }}>Para quem não vai usar o app: entra na divisão dos gastos, mas não edita a viagem.</T>
+      <T v="title" style={{ marginTop: 20, marginBottom: 6 }}>Adicionar pessoa pelo nome</T>
+      <T v="smallMuted" style={{ marginBottom: 10 }}>{(slots ? 'O nome ocupa o lugar do primeiro "Viajante" sem nome. ' : '') + 'Para quem não vai usar o app: entra na divisão dos gastos, mas não edita a viagem.'}</T>
       <Field label="Nome" error={err.name}><Input value={name} onChangeText={setName} placeholder="Nome de quem vai junto" caps="words" error={!!err.name} onSubmit={add} /></Field>
       <Btn label="Adicionar" icon="plus" block onPress={add} />
       <Gap h={8} />
@@ -283,7 +321,7 @@ function PeopleSheet() {
 }
 
 /* ---------- Editar junto: cada pessoa no seu celular ---------- */
-function inviteLink(code: string) { return SITE_URL.replace(/\/+$/, '') + '/convite/' + code; }
+function inviteLink(code: string) { return SITE_URL.replace(/\/+$/, '') + '/convite/?c=' + code; }
 function inviteText(name: string, code: string) {
   return 'Vamos montar juntos a viagem ' + name + ' no Destí! Abra o link e entre com a sua conta: ' + inviteLink(code) + '\nOu, no app, toque em Viagens › Entrar com código e digite ' + code + '.';
 }
@@ -357,18 +395,74 @@ function ShareSheet() {
   const s = useApp();
   const { c } = useTheme();
   const t = A.currentTrip()!;
-  const text = shareText(t, s.reservations);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [sure, setSure] = useState(false);
+  const url = t.publicId ? P.linkOf(t.publicId) : '';
+  const text = shareText(t, s.reservations) + (url ? '\n\nVeja o roteiro completo: ' + url : '');
+  const make = async () => { if (busy) return; setBusy(true); setErr(''); const r = await P.createPublicLink(t.id); setBusy(false); if (r.error) setErr(r.error); else A.showToast('Link público criado. Copie ou envie quando quiser.'); };
+  const off = async () => { setBusy(true); const e = await P.disablePublicLink(t.id); setBusy(false); setSure(false); if (e) setErr(e); else A.showToast('Link desativado. Quem abrir o link verá que ele não existe mais.'); };
   return (
     <View>
+      {/* link público: abre em qualquer aparelho, sem conta, só para ver */}
+      <Card flat style={{ padding: 14, gap: 8, marginBottom: 16 }}>
+        <Row gap={8}><Icon name="link" size={18} color={c.acc} /><T v="lt">Link público do roteiro</T></Row>
+        {!url ? (
+          <>
+            <T v="smallMuted">Quem receber o link vê o roteiro (destino, datas e o que fazer em cada dia) sem precisar de conta. Gastos, reservas e nomes não aparecem.</T>
+            {P.canPublish() ? <Btn icon="link" label={busy ? 'Criando link…' : 'Criar link público'} block onPress={make} /> : <Note kind="info">Para criar um link, entre com uma conta. Sem conta, use Copiar texto ou PDF abaixo.</Note>}
+          </>
+        ) : (
+          <>
+            <T v="smallMuted">O link mostra sempre a versão mais nova do roteiro. Só leitura: ninguém consegue editar por ele.</T>
+            <View accessibilityLabel={'Link público: ' + url} style={{ backgroundColor: c.soft, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12 }}><T v="small" selectable color={c.ink2}>{url}</T></View>
+            <Row gap={10}>
+              <Btn grow kind="secondary" icon="copy" label="Copiar link" onPress={async () => A.showToast((await copyText(url)) ? 'Link copiado' : 'Não foi possível copiar. Selecione o link e copie à mão.')} />
+              <Btn grow kind="secondary" icon="share" label="Enviar link" onPress={() => shareTextNative('Roteiro · ' + t.name, 'Roteiro da viagem ' + t.name + ' no Destí: ' + url)} />
+            </Row>
+            {sure ? (
+              <Card style={{ padding: 12, gap: 8 }}>
+                <T v="smallMuted">Quem já tem o link deixa de ver o roteiro. Dá para criar outro link depois.</T>
+                <Row gap={10}><Btn grow kind="secondary" label="Cancelar" onPress={() => setSure(false)} /><Btn grow kind="danger" label="Desativar" onPress={off} /></Row>
+              </Card>
+            ) : <Btn kind="ghost" label="Desativar link" color={c.errText} block onPress={() => setSure(true)} />}
+          </>
+        )}
+        {err ? <Note kind="err">{err}</Note> : null}
+      </Card>
+      <T v="lt" style={{ marginBottom: 8 }}>Texto do roteiro</T>
       <Card flat style={{ overflow: 'hidden' }}>
-        <ScrollView nestedScrollEnabled style={{ maxHeight: 220 }} contentContainerStyle={{ padding: 12 }}><T v="small" color={c.ink2}>{text}</T></ScrollView>
+        <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }} contentContainerStyle={{ padding: 12 }}><T v="small" color={c.ink2}>{text}</T></ScrollView>
       </Card>
       <T v="smallMuted" style={{ marginTop: 8, marginBottom: 14 }}>Códigos de reserva e valores não entram no roteiro compartilhado.</T>
-      <Btn icon="share" label="Enviar (WhatsApp, e-mail…)" block onPress={() => shareTextNative('Roteiro · ' + t.name, text)} />
+      <Btn icon="share" label="Enviar texto (WhatsApp, e-mail…)" block onPress={() => shareTextNative('Roteiro · ' + t.name, text)} />
       <Gap h={10} />
       <Btn kind="secondary" icon="copy" label="Copiar texto" block onPress={async () => A.showToast((await copyText(text)) ? 'Roteiro copiado. Cole no WhatsApp, e-mail ou notas.' : 'Não foi possível copiar')} />
       <Gap h={10} />
-      <Btn kind="secondary" icon="doc" label="Gerar PDF" block onPress={async () => { if (!(await sharePdf(shareHtml(t), 'Roteiro ' + t.name))) A.showToast('Não foi possível gerar o PDF'); }} />
+      <Btn kind="secondary" icon="doc" label="Gerar PDF" block onPress={async () => { if (!(await sharePdf(shareHtml(t), 'Roteiro ' + t.name))) A.showToast('Este navegador não deixou abrir o PDF. Libere janelas pop-up para este site ou use Copiar texto.'); }} />
+    </View>
+  );
+}
+
+/* ---------- Restaurar backup: juntar (não apaga nada) ou substituir ---------- */
+function RestoreSheet({ arg }: { arg: { data: any } }) {
+  const s = useApp();
+  const d = arg && arg.data;
+  if (!d) return <Note kind="err">Não deu para ler o backup. Nada foi alterado.</Note>;
+  const nT = d.trips.length, nE = (d.expenses || []).length, nR = (d.reservations || []).length;
+  return (
+    <View style={{ gap: 12 }}>
+      <T v="muted">{'O arquivo tem ' + plural(nT, 'viagem', 'viagens') + ', ' + plural(nE, 'gasto', 'gastos') + ' e ' + plural(nR, 'reserva', 'reservas') + '. Neste aparelho há ' + plural(s.trips.length, 'viagem', 'viagens') + '.'}</T>
+      <Card flat style={{ padding: 14, gap: 6 }}>
+        <T v="lt">Juntar (recomendado)</T>
+        <T v="smallMuted">Adiciona as viagens do backup às de agora. Nada é apagado; viagens que já estão aqui ficam como estão.</T>
+        <Btn label="Juntar com as minhas viagens" block onPress={() => A.applyBackup(d, 'merge')} />
+      </Card>
+      <Card flat style={{ padding: 14, gap: 6 }}>
+        <T v="lt">Substituir tudo</T>
+        <T v="smallMuted">Troca todas as viagens, gastos e reservas deste aparelho pelas do backup. Logo depois aparece "Desfazer" para voltar atrás.</T>
+        <Btn kind="secondary" label="Substituir pelas do backup" block onPress={() => A.applyBackup(d, 'replace')} />
+      </Card>
     </View>
   );
 }

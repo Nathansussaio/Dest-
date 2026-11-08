@@ -1,11 +1,13 @@
 /* Ações do app: tudo o que muda o estado passa por aqui */
 import type { AccountData, Trip, Expense, Reservation, Style, PaceId, Leg, ItineraryItem, Member, ChatMsg } from '../types';
 import { getState, setState, pickData, normalizeData, pullCloud, flushCloud, type Screen, type Sheet, type User } from './store';
-import { lookupDest, findDestExact, PLACE_BY_ID, DEST_BY_ID, hasCatalog, RES_TYPES } from '../data';
-import { uid, iso, today0, countDays, parseD, addDays, money, norm, isEmail, plural, fmtShort } from '../lib/format';
+import { lookupDest, findDestExact, PLACE_BY_ID, DEST_BY_ID, hasCatalog, RES_TYPES, CUR_SYMBOL } from '../data';
+import { uid, iso, today0, countDays, parseD, addDays, money, fmtMoney, norm, isEmail, plural, fmtShort } from '../lib/format';
 import { splitBudget, tripLegs, legName, legsTitle, legsCountry, fitLegs, sortItems, legDayArgs, legNameOfDay, nextTime, itemName, pl, mv } from '../lib/trip';
 import { generateTripPlan, buildDay } from '../lib/generator';
-import { tripMembers } from '../lib/group';
+import { tripMembers, nameTaken } from '../lib/group';
+import { mergeAccountData } from '../lib/backupCore';
+import { toBRL, type Cur } from '../lib/expenseCore';
 import { aiReply, type AiKey } from '../lib/assistant';
 import { spentOf, type Alert } from '../lib/alerts';
 import { freshData, defaultChecklist } from '../lib/accounts';
@@ -20,17 +22,18 @@ const S = getState;
 
 /* ---------- Navegação ---------- */
 export function go(screen: Screen, extra: Partial<ReturnType<typeof S>> = {}) {
-  setState((s) => ({ history: s.history.concat([s.screen]), screen, sheet: null, ...extra }));
+  setState((s) => ({ history: s.history.concat([s.screen]), screen, sheet: null, notFound: null, publicView: null, ...extra }));
 }
 export function back(): boolean {
   const s = S();
   if (s.sheet) { setState({ sheet: null }); return true; }
+  if (s.notFound || s.publicView) { setState({ notFound: null, publicView: null }); return true; }
   if (!s.user) { if (s.auth !== 'welcome') { setState({ auth: 'welcome' }); return true; } return false; }
   if (s.history.length) { const h = s.history.slice(); const prev = h.pop()!; setState({ screen: prev, history: h }); return true; }
   if (s.screen !== 'home') { setState({ screen: 'home', history: [] }); return true; }
   return false;
 }
-export function tab(id: Screen, extra: Partial<ReturnType<typeof S>> = {}) { setState({ screen: id, history: [], sheet: null, ...extra }); }
+export function tab(id: Screen, extra: Partial<ReturnType<typeof S>> = {}) { setState({ screen: id, history: [], sheet: null, notFound: null, publicView: null, ...extra }); }
 export function openSheet(sheet: Sheet, arg: any = null) { setState({ sheet, sheetArg: arg }); }
 export function closeSheet() { setState({ sheet: null, sheetArg: null }); }
 export function openTrip(id: string, screen: Screen = 'trip') { go(screen, { tripId: id, day: 0 }); }
@@ -217,12 +220,27 @@ export function saveTripEdit(f: TripEdit): Record<string, string> {
     const extra = f.stops.slice(1).reduce((a, x) => a + x.days, 0);
     if (countDays(f.start, f.end) - extra < 1) e.legs = 'A soma dos dias das paradas passa do total da viagem. Diminua os dias de alguma parada.';
   }
+  /* viajantes: aumentar cria lugares reservados ("Viajante 3"); diminuir só tira lugares reservados sem gastos */
+  const cur = currentTrip();
+  let members: Member[] | null = null;
+  if (cur) {
+    const ms = tripMembers(cur);
+    const want = Math.max(1, Math.min(20, f.travelers || 1));
+    if (want < ms.length) {
+      const used = (id: string) => S().expenses.some((x) => x.tripId === cur.id && ((x.paidBy || 'me') === id || (x.split || []).indexOf(id) >= 0));
+      const next = ms.slice();
+      for (let i = next.length - 1; i >= 0 && next.length > want; i--) if (next[i].placeholder && !used(next[i].id)) next.splice(i, 1);
+      if (next.length > want) e.travelers = 'Esta viagem tem ' + next.length + ' pessoas com nome ou com gastos. Para diminuir, remova alguém em Pessoas da viagem.';
+      else members = next;
+    }
+  }
   if (Object.keys(e).length) return e;
   const u = snap(), n = countDays(f.start, f.end), budget = Math.round((Number(f.budget) || 0) * 100) / 100;
   let regenerated = 0;
   updateTrip((t) => {
     const changedBudget = budget !== t.budget;
-    const base = { ...t, start: f.start, end: f.end, travelers: f.travelers, budget, styles: f.styles.slice(), pace: f.pace, plan: changedBudget ? splitBudget(budget) : t.plan };
+    const people = members ? { members, travelers: members.length } : { travelers: Math.max(f.travelers, tripMembers(t).filter((m) => !m.placeholder).length) };
+    const base = { ...t, start: f.start, end: f.end, ...people, budget, styles: f.styles.slice(), pace: f.pace, plan: changedBudget ? splitBudget(budget) : t.plan };
     const oldLegs = tripLegs(t);
     const stops = f.stops && f.stops.length ? f.stops : null;
     const sameStops = !stops || (stops.length === oldLegs.length && stops.every((x, i) => x.destId === oldLegs[i].destId) && (stops.length === 1 || stops.slice(1).every((x, i) => x.days === oldLegs[i + 1].days)));
@@ -270,24 +288,24 @@ export interface ExpenseInput {
 export function saveExpense(f: ExpenseInput): Record<string, string> {
   const t = currentTrip(); if (!t) return { title: 'Crie uma viagem primeiro.' };
   const e: Record<string, string> = {};
-  const val = Number(f.amount), rate = Number(String(f.rate).replace(',', '.'));
-  if (!(val > 0)) e.amount = 'Informe o valor.';
+  const cur = (['BRL', 'EUR', 'USD'].indexOf(f.currency) >= 0 ? f.currency : 'BRL') as Cur;
+  const conv = toBRL(f.amount, cur, f.rate);
+  if (!conv.ok) e[conv.field] = conv.error;
   if (!f.title || f.title.trim().length < 2) e.title = 'Descreva o gasto (ex.: almoço, táxi, museu).';
-  if (f.currency !== 'BRL' && !(rate > 0)) e.rate = 'Informe a cotação usada.';
   const members = tripMembers(t), group = members.length > 1;
   if (group && !f.split.length) e.split = 'Escolha quem divide este gasto.';
-  if (Object.keys(e).length) return e;
-  const brlV = Math.round((f.currency === 'BRL' ? val : val * rate) * 100) / 100;
+  if (!conv.ok || Object.keys(e).length) return e;
+  const brlV = conv.brl;
   const data: Omit<Expense, 'id' | 'tripId'> = {
     title: f.title.trim(), cat: f.cat, amount: brlV, date: f.date || '', method: f.method, receipt: f.receipt,
-    orig: f.currency === 'BRL' ? null : { value: val, currency: f.currency, rate },
+    orig: conv.orig,
     paidBy: group ? f.paidBy || 'me' : 'me',
     split: group && f.split.length < members.length ? f.split.slice() : null
   };
   const u = snap();
   if (f.id) setState((s) => ({ expenses: s.expenses.map((x) => (x.id === f.id ? { ...x, ...data } : x)), sheet: null }));
   else setState((s) => ({ expenses: s.expenses.concat([{ id: uid('e'), tripId: t.id, ...data }]), sheet: null }));
-  showToast(f.id ? 'Gasto atualizado' : money(brlV) + ' registrados no orçamento', u);
+  showToast((f.id ? 'Gasto atualizado: ' : '') + (conv.orig ? CUR_SYMBOL[conv.orig.currency] + ' ' + fmtMoney(conv.orig.value) + ' = ' : '') + money(brlV) + (f.id ? '' : ' registrados no orçamento'), u);
   return {};
 }
 export function removeExpense(id: string) {
@@ -296,38 +314,60 @@ export function removeExpense(id: string) {
   showToast('Gasto excluído', u);
 }
 
-/* ---------- Grupo ---------- */
-function ensureMembers(t: Trip): Member[] {
-  return t.members && t.members.length ? t.members : [{ id: 'me', name: (S().user && S().user!.name) || 'Você', status: 'owner' }];
-}
-/* Quem vai na viagem: a pessoa entra só pelo nome (para dividir os gastos neste celular) */
+/* ---------- Grupo ----------
+   As pessoas da viagem = tripMembers(t): cadastradas + lugares reservados ("Viajante 2"…) até a quantidade de viajantes.
+   Toda mudança grava a lista completa e mantém travelers = quantidade de pessoas. */
+function withMembers(x: Trip, ms: Member[]): Trip { return { ...x, members: ms.map((m) => ({ ...m })), travelers: Math.max(1, ms.length) }; }
+/* Quem vai na viagem: a pessoa entra pelo nome (para dividir os gastos neste celular).
+   Se a viagem tem lugar reservado ("Viajante 2"), o nome ocupa esse lugar (os gastos já divididos com ele continuam certos). */
 export function invite(name: string): Record<string, string> {
   const t = currentTrip(); if (!t) return {};
-  const e: Record<string, string> = {}, ms = ensureMembers(t);
+  const e: Record<string, string> = {}, ms = tripMembers(t);
   name = name.trim().replace(/\s+/g, ' ');
+  const slot = ms.find((m) => m.placeholder);
   if (name.length < 2) e.name = 'Digite o nome de quem vai junto.';
-  else if (ms.some((m) => m.id !== 'me' && norm(m.name) === norm(name))) e.name = 'Já tem alguém com esse nome. Use também o sobrenome.';
-  else if (ms.length >= 20) e.name = 'Uma viagem pode ter até 20 pessoas.';
+  else if (nameTaken(t, name)) e.name = 'Já tem alguém com esse nome nesta viagem. Use também o sobrenome.';
+  else if (!slot && ms.length >= 20) e.name = 'Uma viagem pode ter até 20 pessoas.';
   if (Object.keys(e).length) return e;
   const u = snap();
-  const m: Member = { id: uid('m'), name, status: 'ativo' };
-  updateTrip((x) => ({ ...x, members: ms.concat([m]), travelers: Math.max(x.travelers, ms.length + 1) }));
+  const next = slot ? ms.map((m) => (m.id === slot.id ? { id: m.id, name, status: 'ativo' as const } : m)) : ms.concat([{ id: uid('m'), name, status: 'ativo' }]);
+  updateTrip((x) => withMembers(x, next));
   showToast(name + ' entrou na viagem', u);
   return {};
 }
+export function renameMember(id: string, name: string): string | null {
+  const t = currentTrip(); if (!t) return null;
+  name = name.trim().replace(/\s+/g, ' ');
+  if (name.length < 2) return 'Digite o nome (pelo menos 2 letras).';
+  if (nameTaken(t, name, id)) return 'Já tem alguém com esse nome nesta viagem. Use também o sobrenome.';
+  updateTrip((x) => withMembers(x, tripMembers(x).map((m) => (m.id === id ? { id: m.id, name, status: m.status, email: m.email, role: m.role } : m))));
+  return null;
+}
 export function removeMember(id: string) {
   const t = currentTrip(); if (!t) return;
-  const m = tripMembers(t).find((x) => x.id === id); if (!m) return;
-  const inUse = S().expenses.some((e) => e.tripId === t.id && (e.paidBy === id || (e.split || []).indexOf(id) >= 0)) || (t.settlements || []).some((x) => x.from === id || x.to === id);
-  if (inUse) { showToast(m.name + ' aparece em gastos ou acertos. Edite esses gastos antes de remover.'); return; }
+  const ms = tripMembers(t);
+  const m = ms.find((x) => x.id === id); if (!m) return;
+  if (id === 'me') { showToast('Você organiza esta viagem e não pode sair da divisão.'); return; }
+  const mine = S().expenses.filter((e) => e.tripId === t.id);
+  const paid = mine.some((e) => (e.paidBy || 'me') === id) || (t.settlements || []).some((x) => x.from === id || x.to === id);
+  if (paid) { showToast(m.name + ' pagou gastos ou tem acertos nesta viagem. Mude quem pagou nesses gastos antes de remover.'); return; }
+  /* gasto dividido só com essa pessoa: não dá para tirar sem decidir quem paga a parte dela */
+  if (mine.some((e) => e.split && e.split.length === 1 && e.split[0] === id)) { showToast('Há gasto dividido só com ' + m.name + '. Edite esse gasto antes de remover.'); return; }
   if (/^u:/.test(id)) {
     if (!G.isOwner(t)) { showToast('Só quem criou a viagem pode tirar alguém do grupo'); return; }
-    G.removeFromGroup(t.id, id).then((e) => { if (e) showToast(e); else { updateTrip((x) => ({ ...x, members: (x.members || []).filter((mm) => mm.id !== id) }), t.id); showToast(m.name + ' saiu do grupo'); } });
+    G.removeFromGroup(t.id, id).then((err) => { if (err) showToast(err); else { dropMember(t.id, id); showToast(m.name + ' saiu do grupo'); } });
     return;
   }
   const u = snap();
-  updateTrip((x) => ({ ...x, members: (x.members || []).filter((mm) => mm.id !== id) }));
-  showToast(m.name + ' saiu da viagem', u);
+  dropMember(t.id, id);
+  showToast(m.name + ' saiu da viagem. A divisão dos gastos foi recalculada.', u);
+}
+/* tira a pessoa da lista e das divisões em que ela aparecia (a parte dela passa para os outros da mesma divisão) */
+function dropMember(tripId: string, id: string) {
+  setState((s) => ({
+    trips: s.trips.map((x) => (x.id === tripId ? withMembers(x, tripMembers(x).filter((mm) => mm.id !== id)) : x)),
+    expenses: s.expenses.map((e) => (e.tripId === tripId && e.split && e.split.indexOf(id) >= 0 ? { ...e, split: e.split.filter((k) => k !== id) } : e))
+  }));
 }
 
 /* ---------- Editar junto (cada pessoa no seu celular) ---------- */
@@ -473,17 +513,19 @@ export function readAllAlerts(ids: string[]) { setState({ alertsRead: ids }); }
    Sem ele: contas só neste aparelho (a senha fica guardada como resumo SHA-256). */
 function signIn(user: User, msg: string, fresh: boolean, first?: Screen) {
   const s = S();
-  const carry = s.pendingGuest;
+  const carry = user.method !== 'guest' ? s.pendingGuest : null;
   const cached = s.vault[user.email];
-  const data = cached ? normalizeData(cached) : carry && user.method !== 'guest' ? carry : freshData();
+  const data = cached ? normalizeData(cached) : freshData();
   const scr: Screen = first || (carry ? 'home' : fresh || !cached ? (fresh ? 'onboard' : 'home') : 'home');
   setState({ ...data, user, auth: 'welcome', attempts: 0, lockedUntil: 0, sheet: null, pendingGuest: null, history: scr === 'create' ? ['home'] : [], screen: scr, tripId: data.trips.length ? data.trips[0].id : null, day: 0 });
   /* conta na nuvem: entrar não conta como mudança; a cópia deste celular mantém a data em que foi mexida de verdade
      (assim uma cópia antiga ou vazia nunca passa por cima da versão mais nova guardada na nuvem) */
-  if (user.id && !carry) { const prevT = s.vaultTime[user.email] || 0; setState((st) => ({ vaultTime: { ...st.vaultTime, [user.email]: cached ? prevT : 0 } })); }
-  showToast(msg);
-  /* conta na nuvem: traz a versão mais recente (ou envia a deste aparelho, se for mais nova) */
-  if (user.id) pullCloud();
+  if (user.id) { const prevT = s.vaultTime[user.email] || 0; setState((st) => ({ vaultTime: { ...st.vaultTime, [user.email]: cached ? prevT : 0 } })); }
+  showToast(carry && carry.trips.length ? msg + '. ' + (carry.trips.length === 1 ? 'A viagem do modo visitante veio junto.' : carry.trips.length + ' viagens do modo visitante vieram junto.') : msg);
+  /* conta na nuvem: traz a versão mais recente (ou envia a deste aparelho, se for mais nova);
+     as viagens do modo visitante entram depois, somadas às da conta (nunca no lugar delas) */
+  if (user.id) pullCloud().then(() => { if (carry) mergeGuest(carry); });
+  else if (carry) mergeGuest(carry);
 }
 const LOCKED = 'Muitas tentativas seguidas. Aguarde 30 segundos e tente de novo.';
 function countFail() {
@@ -577,16 +619,32 @@ export async function confirmReset(email: string, code: string, nw: string, nw2:
   return {};
 }
 
-export function tryAsGuest() { signIn({ name: 'Visitante', email: 'visitante@local', method: 'guest' }, 'Modo visitante: nada é salvo até você criar uma conta', true, 'create'); }
+export const GUEST_EMAIL = 'visitante@local';
+export function tryAsGuest() {
+  const back = !!S().vault[GUEST_EMAIL] && S().vault[GUEST_EMAIL].trips.length > 0;
+  signIn({ name: 'Visitante', email: GUEST_EMAIL, method: 'guest' }, back ? 'Modo visitante: suas viagens deste aparelho voltaram' : 'Modo visitante: suas viagens ficam salvas só neste aparelho', !back, back ? 'trips' : 'create');
+}
 export function guestToSignup() {
   setState({ pendingGuest: snap(), user: null, auth: 'signup', screen: 'home', history: [], sheet: null });
-  showToast('Crie sua conta: suas viagens vêm junto');
+  showToast('Crie sua conta (ou entre): as viagens do modo visitante vêm junto');
+}
+export function guestToLogin() {
+  setState({ pendingGuest: snap(), user: null, auth: 'login', screen: 'home', history: [], sheet: null });
+  showToast('Entre na sua conta: as viagens do modo visitante vêm junto');
+}
+/* junta as viagens do modo visitante na conta (sem apagar nada da conta) e limpa a cópia do visitante */
+function mergeGuest(carry: AccountData) {
+  const r = mergeAccountData(pickData(S()), normalizeData(carry));
+  const vault = { ...S().vault };
+  delete vault[GUEST_EMAIL];
+  setState({ ...r.data, vault });
 }
 export async function logout() {
   const u = S().user;
   if (u && u.id) { await G.flushShared().catch(() => {}); await flushCloud(); await cloudSignOut(); }
+  const guest = !!u && u.method === 'guest';
   setState({ user: null, auth: 'welcome', sheet: null, screen: 'home', history: [], ...freshData() });
-  showToast('Você saiu da conta');
+  showToast(guest ? 'Você saiu do modo visitante. As viagens continuam neste aparelho: entre como visitante de novo para vê-las.' : 'Você saiu da conta');
 }
 export async function changePassword(cur: string, nw: string, nw2: string): Promise<Record<string, string>> {
   const s = S(), e: Record<string, string> = {};
@@ -658,13 +716,22 @@ export async function exportBackup() {
 export async function importBackup() {
   const { pickBackup, parseBackup } = await import('../lib/backup');
   const text = await pickBackup();
-  if (text == null) return;
+  if (text == null) return; /* a pessoa cancelou a escolha do arquivo: nada muda */
   const r = parseBackup(text);
   if ('error' in r) { showToast(r.error); return; }
+  /* pergunta antes: juntar (não apaga nada) ou substituir */
+  openSheet('restore', { data: normalizeData(r.data) });
+}
+export function applyBackup(data: AccountData, mode: 'merge' | 'replace') {
   const u = snap();
-  const d = normalizeData(r.data);
-  setState({ ...d, screen: 'home', history: [], tripId: d.trips[0] ? d.trips[0].id : null } as any);
-  showToast('Backup restaurado: ' + plural(d.trips.length, 'viagem', 'viagens'), u);
+  if (mode === 'merge') {
+    const r = mergeAccountData(pickData(S()), data);
+    setState({ ...r.data, sheet: null, sheetArg: null });
+    showToast(r.added ? plural(r.added, 'viagem adicionada', 'viagens adicionadas') + (r.skipped ? ' · ' + plural(r.skipped, 'já existia', 'já existiam') : '') : 'Nenhuma viagem nova no backup: todas já estavam aqui', u);
+    return;
+  }
+  setState({ ...data, sheet: null, sheetArg: null, screen: 'home', history: [], tripId: data.trips[0] ? data.trips[0].id : null } as any);
+  showToast('Backup restaurado: ' + plural(data.trips.length, 'viagem', 'viagens') + '. Toque em Desfazer para voltar ao que era antes.', u);
 }
 
 /* ---------- Nuvem: sincronizar agora (Perfil) ---------- */

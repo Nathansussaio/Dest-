@@ -13,7 +13,7 @@ export type Screen =
   | 'create' | 'created' | 'trip' | 'itinerary' | 'addPlace' | 'map' | 'saved' | 'assistant' | 'place'
   | 'docs' | 'style' | 'onboard' | 'alerts';
 export type AuthScreen = 'welcome' | 'login' | 'signup' | 'verify' | 'forgot';
-export type Sheet = 'expense' | 'editTrip' | 'people' | 'share' | 'password' | 'delete' | 'resForm' | 'join' | null;
+export type Sheet = 'expense' | 'editTrip' | 'people' | 'share' | 'password' | 'delete' | 'resForm' | 'join' | 'restore' | null;
 
 /* id = conta na nuvem; contas só do aparelho não têm id */
 export interface User { id?: string; name: string; email: string; method: 'email' | 'guest' }
@@ -36,6 +36,9 @@ export interface UIState {
   syncState: 'ok' | 'pending' | 'offline';
   /* viagens em grupo: versão enviada/recebida por último de cada uma (h = resumo do conteúdo, at = data na nuvem) */
   shareMeta: Record<string, { h: string; at: string }>;
+  /* site: endereço que não existe (página, viagem ou lugar) e roteiro público aberto por link (só leitura) */
+  notFound: null | 'page' | 'trip' | 'place';
+  publicView: string | null;
 }
 
 export type State = UIState & AccountData;
@@ -46,7 +49,7 @@ let state: State = {
   ready: false, user: null, accounts: [], vault: {}, vaultTime: {}, auth: 'welcome',
   screen: 'home', history: [], tripId: null, day: 0, placeId: null, styleId: 'Cultural',
   sheet: null, sheetArg: null, toast: null, pendingGuest: null, lockedUntil: 0, attempts: 0, createdId: null, createdPlan: null,
-  syncState: 'ok', shareMeta: {},
+  syncState: 'ok', shareMeta: {}, notFound: null, publicView: null,
   ...freshData()
 };
 const listeners = new Set<() => void>();
@@ -55,19 +58,21 @@ export function getState(): State { return state; }
 export function setState(patch: Partial<State> | ((s: State) => Partial<State>)) {
   const p = typeof patch === 'function' ? patch(state) : patch;
   state = { ...state, ...p };
-  /* os dados da conta conectada são guardados junto (exceto no modo visitante) */
+  /* os dados de quem está usando são guardados neste aparelho (no modo visitante também; só não vão para a nuvem) */
   const u = state.user;
-  if (u && u.method !== 'guest' && touchesData(p)) {
+  if (u && touchesData(p)) {
     const email = u.email, now = Date.now();
     state = { ...state, vault: { ...state.vault, [email]: pickData(state) }, vaultTime: { ...state.vaultTime, [email]: now } };
     persistSoon();
-    if (u.id) { cloudSoon(); if (dataHook) dataHook(); }
+    if (u.id) { cloudSoon(); if (dataHook) dataHook(); hooks.forEach((h) => h()); }
   } else if ('accounts' in p || 'vault' in p || 'user' in p || 'shareMeta' in p) persistSoon();
   listeners.forEach((l) => l());
 }
 /* avisado a cada mudança nos dados de uma conta na nuvem (usado pela viagem em grupo) */
 let dataHook: (() => void) | null = null;
 export function setDataHook(f: (() => void) | null) { dataHook = f; }
+const hooks = new Set<() => void>();
+export function addDataHook(f: () => void) { hooks.add(f); return () => { hooks.delete(f); }; }
 export function subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; }
 export function useApp(): State { return useSyncExternalStore(subscribe, getState, getState); }
 
@@ -87,16 +92,27 @@ export function normalizeData(d: Partial<AccountData> | null | undefined): Accou
 
 /* ---------- Cópia no aparelho ---------- */
 let saveT: ReturnType<typeof setTimeout> | null = null;
+function writeNow() {
+  if (!state.ready) return;
+  if (saveT) { clearTimeout(saveT); saveT = null; }
+  const payload = {
+    accounts: CLOUD_ENABLED ? [] : state.accounts, vault: state.vault, vaultTime: state.vaultTime, shareMeta: state.shareMeta,
+    /* o modo visitante também volta ao reabrir o navegador (os dados ficam só neste aparelho) */
+    lastUser: state.user || null
+  };
+  AsyncStorage.setItem(KEY, JSON.stringify(payload)).catch(() => { /* sem espaço: o app segue funcionando */ });
+}
 function persistSoon() {
   if (!state.ready) return;
   if (saveT) clearTimeout(saveT);
-  saveT = setTimeout(() => {
-    const payload = {
-      accounts: CLOUD_ENABLED ? [] : state.accounts, vault: state.vault, vaultTime: state.vaultTime, shareMeta: state.shareMeta,
-      lastUser: state.user && state.user.method !== 'guest' ? state.user : null
-    };
-    AsyncStorage.setItem(KEY, JSON.stringify(payload)).catch(() => { /* sem espaço: o app segue funcionando */ });
-  }, 400);
+  saveT = setTimeout(writeNow, 250);
+}
+/* site: ao recarregar, fechar ou trocar de aba, grava na hora o que ainda estava esperando */
+if (typeof window !== 'undefined' && typeof (window as any).addEventListener === 'function') {
+  const flush = () => { if (saveT) writeNow(); };
+  window.addEventListener('pagehide', flush);
+  window.addEventListener('beforeunload', flush);
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if ((document as any).visibilityState === 'hidden') flush(); });
 }
 export function flushSave() { persistSoon(); }
 
@@ -159,6 +175,9 @@ function keepShared(local: State, incoming: AccountData): AccountData {
   };
 }
 
+let corrupted = false;
+/* a cópia do aparelho estava estragada ao abrir (o app avisa uma vez) */
+export function wasCorrupted() { const c = corrupted; corrupted = false; return c; }
 export async function loadFromDevice() {
   let accounts: LocalAccount[] = [];
   let vault: Record<string, AccountData> = {}, vaultTime: Record<string, number> = {};
@@ -173,11 +192,15 @@ export async function loadFromDevice() {
       lastUser = j.lastUser || null;
       shareMeta = j.shareMeta || {};
     }
-  } catch { /* cópia corrompida: começa do zero */ }
+  } catch {
+    /* cópia corrompida: guarda o conteúdo à parte (para não apagar sem querer) e começa do zero */
+    try { const raw = await AsyncStorage.getItem(KEY); if (raw) await AsyncStorage.setItem(KEY + ':corrompido:' + Date.now(), raw); } catch { /* sem espaço */ }
+    corrupted = true;
+  }
   if (CLOUD_ENABLED) {
-    /* a sessão do Supabase decide quem está conectado */
+    /* a sessão do Supabase decide quem está conectado; sem sessão, o modo visitante continua */
     const cu = await cloudRestore();
-    lastUser = cu ? { id: cu.id, name: cu.name, email: cu.email, method: 'email' } : null;
+    lastUser = cu ? { id: cu.id, name: cu.name, email: cu.email, method: 'email' } : lastUser && lastUser.method === 'guest' ? lastUser : null;
   } else if (lastUser && lastUser.id) lastUser = null;
   const data = lastUser ? normalizeData(vault[lastUser.email]) : freshData();
   state = {
