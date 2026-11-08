@@ -1,0 +1,19 @@
+# Confere quais partes do banco já foram ligadas (sem criar nem mudar nada)
+name: Conferir o banco
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  sondar:
+    runs-on: ubuntu-24.04
+    steps:
+      - env:
+          URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          for t in vaults shared_trips trip_members trip_invites public_trips; do
+            echo "$t: $(curl -s -o /dev/null -w '%{http_code}' "$URL/rest/v1/$t?select=*&limit=0" -H "apikey: $KEY")"
+          done
+          for f in get_public_trip join_trip; do
+            echo "rpc $f: $(curl -s -X POST "$URL/rest/v1/rpc/$f" -H "apikey: $KEY" -H 'Content-Type: application/json' -d '{"pid":"x","invite":"x","member_name":"x"}' | head -c 160)"
+          done
