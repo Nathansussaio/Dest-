@@ -22,7 +22,7 @@ function tile(req) {
     }).catch(() => hit || Response.error());
   }));
 }
-const VERSION = '5b26704e5d8f';
+const VERSION = 'e2ac99ab8066';
 const CACHE = 'desti-' + VERSION;
 const BASE = new URL(self.registration.scope).pathname;
 const SHELL = [BASE, BASE + 'manifest.json', BASE + 'favicon.png', BASE + 'icon-192.png', BASE + 'icon-512.png'];
