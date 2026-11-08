@@ -24,7 +24,7 @@ export const STATIC_DIRS: { dir: string; title: string }[] = [
   { dir: 'roteiro', title: 'Roteiro de viagem compartilhado' }, { dir: 'convite', title: 'Convite para editar uma viagem' }
 ];
 
-export interface RouteState { user: boolean; auth: AuthScreen; screen: Screen; tripId: string | null; day: number; placeId: string | null; publicView: string | null }
+export interface RouteState { user: boolean; auth: AuthScreen; screen: Screen; tripId: string | null; day: number; placeId: string | null; publicView: string | null; inviteView?: string | null }
 export interface Route {
   screen?: Screen; auth?: AuthScreen; tripId?: string; day?: number; placeId?: string;
   invite?: string;          /* convite para editar junto (código) */
@@ -36,6 +36,7 @@ export interface Route {
 /* endereço (sem o caminho base do site) para o estado atual */
 export function pathFor(s: RouteState): string {
   if (s.publicView) return 'roteiro/?id=' + encodeURIComponent(s.publicView);
+  if (s.inviteView) return 'convite/?c=' + encodeURIComponent(s.inviteView);
   if (!s.user) return AUTH_SEG[s.auth] ? AUTH_SEG[s.auth] + '/' : '';
   const sc = s.screen;
   if (sc === 'place' && s.placeId) return 'lugar/?id=' + encodeURIComponent(s.placeId);
@@ -88,4 +89,28 @@ export function parseRoute(path: string, search = ''): Route | null {
   if (parts.length > 1) return { unknown: true };
   const sc = screenOfSeg(head, false);
   return sc ? { screen: sc } : { unknown: true };
+}
+
+/* Endereços antigos com o id no caminho (/viagem/<id>, /convite/<código>, /roteiro/<id>, /lugar/<id>).
+   O GitHub Pages não tem esses arquivos e entrega o 404.html; ele chama esta função logo no início
+   e troca o endereço pelo novo (com "?id=") antes de carregar o app. Sem dependências: o código desta
+   função é copiado para dentro do 404.html por tools/static-routes.ts. */
+export function legacyTarget(rest: string, search: string): string | null {
+  var parts: string[] = [];
+  try { parts = rest.split('/').filter(function (x) { return !!x; }).map(function (x) { return decodeURIComponent(x); }); } catch (e) { return null; }
+  var head = parts[0], id = parts[1];
+  if (!id || parts.length > 4) return null;
+  var enc = encodeURIComponent;
+  var keep = search && search.length > 1 ? '&' + search.slice(1) : '';
+  if (head === 'viagem') {
+    var to = 'viagem/?id=' + enc(id);
+    if (parts[2] === 'roteiro') to += '&tela=roteiro&dia=' + (parseInt(parts[3] || '1', 10) || 1);
+    else if (parts[2]) to += '&tela=' + enc(parts[2]);
+    return to;
+  }
+  if (parts.length > 2) return null;
+  if (head === 'convite') return 'convite/?c=' + enc(id) + keep;
+  if (head === 'roteiro') return 'roteiro/?id=' + enc(id) + keep;
+  if (head === 'lugar') return 'lugar/?id=' + enc(id) + keep;
+  return null;
 }

@@ -37,8 +37,10 @@ export interface UIState {
   /* viagens em grupo: versão enviada/recebida por último de cada uma (h = resumo do conteúdo, at = data na nuvem) */
   shareMeta: Record<string, { h: string; at: string }>;
   /* site: endereço que não existe (página, viagem ou lugar) e roteiro público aberto por link (só leitura) */
-  notFound: null | 'page' | 'trip' | 'place';
+  notFound: null | 'page' | 'trip' | 'place' | 'checking' | 'private';
   publicView: string | null;
+  /* convite para editar junto aberto por link (/convite/?c=…): mostra a viagem e pede para aceitar ou recusar */
+  inviteView: string | null;
 }
 
 export type State = UIState & AccountData;
@@ -49,7 +51,7 @@ let state: State = {
   ready: false, user: null, accounts: [], vault: {}, vaultTime: {}, auth: 'welcome',
   screen: 'home', history: [], tripId: null, day: 0, placeId: null, styleId: 'Cultural',
   sheet: null, sheetArg: null, toast: null, pendingGuest: null, lockedUntil: 0, attempts: 0, createdId: null, createdPlan: null,
-  syncState: 'ok', shareMeta: {}, notFound: null, publicView: null,
+  syncState: 'ok', shareMeta: {}, notFound: null, publicView: null, inviteView: null,
   ...freshData()
 };
 const listeners = new Set<() => void>();

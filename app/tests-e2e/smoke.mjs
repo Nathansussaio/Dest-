@@ -61,6 +61,16 @@ for (const [nome, tipo] of [['Chromium', chromium], ['Firefox', firefox], ['WebK
         await p3.getByText('Viagem não encontrada').first().waitFor({ timeout: 15000 });
         await p3.close();
       });
+      await passo('endereços antigos viram o formato novo', async () => {
+        const p5 = await p.context().newPage();
+        await p5.goto(base + 'convite/ABCDEFGH/');
+        await p5.waitForURL(/\/convite\/\?c=ABCDEFGH$/, { timeout: 15000 });
+        await p5.getByText('Convite para viagem').first().waitFor({ timeout: 15000 });
+        await p5.goto(base + 'viagem/t1_antigo');
+        await p5.waitForURL(/\/viagem\/\?id=t1_antigo$/, { timeout: 15000 });
+        await p5.getByText('Viagem não encontrada').first().waitFor({ timeout: 20000 });
+        await p5.close();
+      });
       await passo('roteiro público inexistente mostra aviso (sem login)', async () => {
         const c = await b.newContext({ viewport: { width: w, height: h } });
         const p4 = await c.newPage();

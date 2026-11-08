@@ -16,13 +16,13 @@ export async function createPublicLink(tripId: string): Promise<{ error?: string
   const uid = me();
   const t = S().trips.find((x) => x.id === tripId);
   if (!t) return { error: 'Viagem não encontrada.' };
-  if (!uid) return { error: 'Crie uma conta (ou entre) para gerar um link público. Sem conta, use Copiar texto ou PDF.' };
+  if (!uid) return { error: 'Para gerar um link público, crie uma conta ou sincronize esta viagem. Sem conta, use Copiar texto ou Gerar PDF.' };
   if (t.publicId) return { url: linkOf(t.publicId) };
   const id = newPublicId();
   const snap = publicSnapshot(t);
   const r = await cloudPublicSave(id, uid, tripId, snap, true);
   if (!r.ok) return { error: r.error };
-  sent[id] = stable(snap);
+  sent[id] = tripId + '|' + stable(snap);
   setState((s) => ({ trips: s.trips.map((x) => (x.id === tripId ? { ...x, publicId: id } : x)) }));
   return { url: linkOf(id) };
 }
@@ -41,7 +41,7 @@ async function refresh() {
   if (!uid) return;
   for (const t of S().trips) {
     if (!t.publicId) continue;
-    const snap = publicSnapshot(t), key = stable(snap);
+    const snap = publicSnapshot(t), key = t.id + '|' + stable(snap); /* o id muda quando a viagem passa a ser em grupo */
     if (sent[t.publicId] === key) continue;
     const r = await cloudPublicSave(t.publicId, uid, t.id, snap, false);
     if (r.ok) sent[t.publicId] = key;

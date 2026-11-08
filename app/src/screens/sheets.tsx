@@ -400,17 +400,22 @@ function ShareSheet() {
   const [sure, setSure] = useState(false);
   const url = t.publicId ? P.linkOf(t.publicId) : '';
   const text = shareText(t, s.reservations) + (url ? '\n\nVeja o roteiro completo: ' + url : '');
-  const make = async () => { if (busy) return; setBusy(true); setErr(''); const r = await P.createPublicLink(t.id); setBusy(false); if (r.error) setErr(r.error); else A.showToast('Link público criado. Copie ou envie quando quiser.'); };
+  const make = async () => { if (busy) return; setBusy(true); setErr(''); const r = await P.createPublicLink(t.id); setBusy(false); if (r.error) setErr(r.error); else A.showToast('Link público pronto. Copie ou envie quando quiser.'); };
   const off = async () => { setBusy(true); const e = await P.disablePublicLink(t.id); setBusy(false); setSure(false); if (e) setErr(e); else A.showToast('Link desativado. Quem abrir o link verá que ele não existe mais.'); };
   return (
     <View>
       {/* link público: abre em qualquer aparelho, sem conta, só para ver */}
       <Card flat style={{ padding: 14, gap: 8, marginBottom: 16 }}>
-        <Row gap={8}><Icon name="link" size={18} color={c.acc} /><T v="lt">Link público do roteiro</T></Row>
+        <Row gap={8}><Icon name="link" size={18} color={c.acc} /><T v="lt">Compartilhar roteiro público (só para ver)</T></Row>
         {!url ? (
           <>
-            <T v="smallMuted">Quem receber o link vê o roteiro (destino, datas e o que fazer em cada dia) sem precisar de conta. Gastos, reservas e nomes não aparecem.</T>
-            {P.canPublish() ? <Btn icon="link" label={busy ? 'Criando link…' : 'Criar link público'} block onPress={make} /> : <Note kind="info">Para criar um link, entre com uma conta. Sem conta, use Copiar texto ou PDF abaixo.</Note>}
+            <T v="smallMuted">Gera um link que qualquer pessoa abre sem conta, em qualquer navegador, para ver destino, datas e o que fazer em cada dia. Gastos, reservas, códigos e nomes não aparecem.</T>
+            {P.canPublish() ? <Btn icon="link" label={busy ? 'Gerando o link…' : 'Compartilhar roteiro público'} block onPress={make} /> : (
+              <>
+                <Note kind="info">Para gerar um link público, crie uma conta ou sincronize esta viagem. Enquanto isso, use Copiar texto ou Gerar PDF abaixo.</Note>
+                {s.user && s.user.method === 'guest' ? <Btn kind="secondary" label="Criar conta (a viagem vai junto)" block onPress={A.guestToSignup} /> : null}
+              </>
+            )}
           </>
         ) : (
           <>
@@ -429,6 +434,12 @@ function ShareSheet() {
           </>
         )}
         {err ? <Note kind="err">{err}</Note> : null}
+      </Card>
+      {/* outro fluxo: editar junto (cada pessoa com a própria conta) */}
+      <Card flat style={{ padding: 14, gap: 8, marginBottom: 16 }}>
+        <Row gap={8}><Icon name="users" size={18} color={c.acc} /><T v="lt">Convidar para editar junto</T></Row>
+        <T v="smallMuted">Para quem vai com você: a pessoa entra com a própria conta e edita o roteiro, os gastos e as reservas. Não é o mesmo que o link público.</T>
+        <Btn kind="secondary" icon="users" label="Convidar para editar junto" block onPress={() => A.openSheet('people')} />
       </Card>
       <T v="lt" style={{ marginBottom: 8 }}>Texto do roteiro</T>
       <Card flat style={{ overflow: 'hidden' }}>

@@ -149,7 +149,7 @@ export async function cloudSave(userId: string, payload: AccountData, updatedAt:
 export interface SharedRow { id: string; owner: string; data: any; updated_at: string }
 function groupErr(e: any): string {
   const m = String((e && (e.message || e.code)) || e || '').toLowerCase();
-  if (/invalid invite/.test(m)) return 'Código de convite não encontrado. Confira as letras e tente de novo.';
+  if (/invalid invite/.test(m)) return 'Convite não encontrado ou expirado. Confira o código ou peça um convite novo para quem organiza a viagem.';
   if (/trip full/.test(m)) return 'Esta viagem já tem 20 pessoas.';
   if (/relation .* does not exist|could not find the (table|function)|schema cache|42p01|pgrst20[0-9]/.test(m)) return 'A viagem em grupo ainda não foi ligada no Supabase (falta rodar o schema-grupo.sql).';
   if (/network|fetch|timeout/.test(m)) return pt(e);
@@ -227,20 +227,45 @@ function publicErr(e: any): string {
   if (/network|fetch|timeout|failed to fetch/.test(m)) return 'Sem conexão agora. Tente de novo quando a internet voltar.';
   return 'Não foi possível concluir agora.' + (e && e.message ? ' Detalhe: ' + String(e.message).slice(0, 140) : '');
 }
-/* qualquer pessoa: lê pelo id. null = não existe; undefined = não deu para ler (conexão) */
+/* resposta lenta (rede ruim): desiste depois de alguns segundos em vez de deixar a tela presa */
+function withTimeout<T>(p: PromiseLike<T>, ms: number): Promise<T | 'timeout'> {
+  return Promise.race([Promise.resolve(p), new Promise<'timeout'>((r) => setTimeout(() => r('timeout'), ms))]);
+}
+const noFunc = (error: any) => /could not find the function|pgrst202|42883|schema cache/i.test(String((error && error.message) || '') + ' ' + String((error && error.code) || ''));
+/* qualquer pessoa: lê pelo id. null = não existe; undefined = não deu para ler (conexão ou demora) */
 export async function cloudPublicGet(id: string): Promise<{ data: any } | null | undefined> {
   try {
-    const { data, error } = await sb().rpc('get_public_trip', { pid: id });
+    const r: any = await withTimeout(sb().rpc('get_public_trip', { pid: id }), 12000);
+    if (r === 'timeout') return undefined;
+    const { data, error } = r;
     /* função ainda não criada no Supabase (falta o schema-publico.sql): para quem abre, o roteiro não existe */
-    if (error) return /could not find the function|pgrst202|42883|schema cache/i.test(String(error.message || '') + ' ' + String((error as any).code || '')) ? null : undefined;
+    if (error) return noFunc(error) ? null : undefined;
     return data ? { data } : null;
+  } catch { return undefined; }
+}
+/* link antigo de viagem aberto por outra pessoa: se essa viagem tem link público, devolve o id dele */
+export async function cloudPublicIdForTrip(tripId: string): Promise<string | null> {
+  try {
+    const r: any = await withTimeout(sb().rpc('public_id_for_trip', { tid: tripId }), 8000);
+    if (r === 'timeout' || r.error || !r.data) return null;
+    return String(r.data);
+  } catch { return null; }
+}
+/* convite: o que mostrar antes de aceitar. null = não existe; undefined = conexão; 'old' = banco sem a função (aceita direto) */
+export interface InviteInfo { trip_id: string; name: string; country: string; start: string; end: string; by: string; people: number; member: boolean }
+export async function cloudInviteInfo(code: string): Promise<InviteInfo | null | undefined | 'old'> {
+  try {
+    const r: any = await withTimeout(sb().rpc('invite_info', { invite: code }), 12000);
+    if (r === 'timeout') return undefined;
+    if (r.error) return noFunc(r.error) ? 'old' : undefined;
+    return r.data ? (r.data as InviteInfo) : null;
   } catch { return undefined; }
 }
 export async function cloudPublicSave(id: string, ownerId: string, tripId: string, data: any, isNew: boolean): Promise<Result<null>> {
   try {
     const q = isNew
       ? sb().from('public_trips').insert({ id, owner: ownerId, trip_id: tripId, data })
-      : sb().from('public_trips').update({ data, updated_at: new Date().toISOString() }).eq('id', id);
+      : sb().from('public_trips').update({ data, trip_id: tripId, updated_at: new Date().toISOString() }).eq('id', id);
     const { error } = await q;
     return error ? { ok: false, error: publicErr(error) } : { ok: true, value: null };
   } catch (e) { return { ok: false, error: publicErr(e) }; }

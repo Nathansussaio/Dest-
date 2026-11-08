@@ -41,3 +41,11 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.get_public_trip(text) from public;
 grant execute on function public.get_public_trip(text) to anon, authenticated;
+
+-- link antigo de viagem (/viagem/<id>) aberto por outra pessoa: se a viagem tem link público, devolve o id dele
+create or replace function public.public_id_for_trip(tid text) returns text
+language sql stable security definer set search_path = public as $$
+  select id from public.public_trips where trip_id = tid order by updated_at desc limit 1;
+$$;
+revoke all on function public.public_id_for_trip(text) from public;
+grant execute on function public.public_id_for_trip(text) to anon, authenticated;

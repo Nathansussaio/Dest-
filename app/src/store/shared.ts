@@ -192,9 +192,10 @@ export async function newInvite(tripId: string): Promise<string | null> {
 export async function joinTrip(input: string): Promise<{ error?: string; tripId?: string }> {
   const code = cleanCode(input);
   if (code.length < 6) return { error: 'Digite o código do convite (8 letras e números).' };
-  if (!myId()) { pendingInvite = code; return { error: 'Entre com sua conta para participar desta viagem.' }; }
+  if (!myId()) { setPendingInvite(code); return { error: 'Entre com sua conta para participar desta viagem.' }; }
   const r = await cloudJoinTrip(code, myName());
   if (!r.ok) return { error: r.error };
+  takePendingInvite();
   await syncShared();
   const t = S().trips.find((x) => x.id === r.value);
   return t ? { tripId: t.id } : { error: 'Você entrou na viagem, mas não deu para baixar agora. Ela aparece quando a conexão voltar.' };
@@ -231,9 +232,13 @@ export async function removeFromGroup(tripId: string, memberId: string): Promise
 export function isOwner(t: Trip): boolean { return !!t.shared && t.shared.owner === myId(); }
 
 /* ---------- Convite por link (site: /convite/<código>) ---------- */
-let pendingInvite: string | null = null;
-export function setPendingInvite(code: string) { pendingInvite = cleanCode(code); }
-export function takePendingInvite(): string | null { const c = pendingInvite; pendingInvite = null; return c; }
+/* o código fica guardado também na aba do navegador: sobrevive a criar conta, entrar e recarregar a página */
+const PK = 'desti:convite';
+const ss = (): any => { try { return typeof sessionStorage !== 'undefined' ? sessionStorage : null; } catch { return null; } };
+let pendingInvite: string | null = (() => { try { const x = ss(); return x ? x.getItem(PK) : null; } catch { return null; } })();
+export function setPendingInvite(code: string) { pendingInvite = cleanCode(code); try { const x = ss(); if (x) x.setItem(PK, pendingInvite); } catch { /* sem armazenamento */ } }
+export function peekPendingInvite(): string | null { return pendingInvite; }
+export function takePendingInvite(): string | null { const c = pendingInvite; pendingInvite = null; try { const x = ss(); if (x) x.removeItem(PK); } catch { /* ignora */ } return c; }
 
 /* ---------- Liga e desliga com a conta ---------- */
 let watching: string | null = null, unwatch: (() => void) | null = null, poll: ReturnType<typeof setInterval> | null = null;
@@ -245,11 +250,9 @@ function start(id: string) {
   setTimeout(async () => {
     if (watching !== id) return;
     if (hasShared()) { checked = true; await syncShared(); }
-    const code = takePendingInvite();
-    if (code && watching === id) {
-      const r = await joinTrip(code);
-      if (r.tripId) { if (onJoined) onJoined(r.tripId); } else if (r.error) say(r.error);
-    }
+    /* entrou com um convite guardado: volta para a página do convite (aceitar ou recusar) */
+    const code = peekPendingInvite();
+    if (code && watching === id) setState({ inviteView: code, notFound: null, publicView: null, sheet: null });
   }, 600);
   unwatch = cloudWatchShared(() => { if (hasShared()) sharedSoon(300); });
   poll = setInterval(() => {

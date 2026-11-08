@@ -6,6 +6,11 @@ on:
     workflows: ['Publicar o site']
     types: [completed]
   workflow_dispatch:
+    inputs:
+      manter_link:
+        description: 'Manter a conta de teste e o link público de exemplo (não excluir no fim)'
+        type: boolean
+        default: false
 permissions:
   contents: read
 jobs:
@@ -27,16 +32,25 @@ jobs:
             sleep 10
           done
           echo "::warning::a versão nova ainda não apareceu; conferindo a que está no ar"
-      - name: Status de cada endereço
+      - name: Status de cada endereço (sem seguir redirecionamento, depois seguindo)
         run: |
           fail=0
-          check() { code=$(curl -s -o /tmp/p.html -w '%{http_code}' -L "$SITE/$1"); title=$(grep -o '<title>[^<]*' /tmp/p.html | head -1 | cut -c8-); echo "$code  /$1  ·  $title"; [ "$code" = "$2" ] || { echo "::error::/$1 respondeu $code (esperado $2)"; fail=1; }; }
-          check "" 200
-          for r in viagens/ viagens explorar/ gastos/ perfil/ nova-viagem/ entrar/ criar-conta/ "viagem/?id=t1_teste" "roteiro/?id=abcdefghijkl" "convite/?c=ABCDEFGH" privacidade.html termos.html og-image.png favicon.png manifest.json robots.txt sitemap.xml; do check "$r" 200; done
-          check "endereco-que-nao-existe" 404
-          # os arquivos do app (JavaScript) que a página pede existem
+          host=$(echo "$SITE" | grep -o '^https://[^/]*')
+          check() {
+            first=$(curl -s -o /dev/null -w '%{http_code}' "$SITE/$1")
+            final=$(curl -s -o /tmp/p.html -w '%{http_code}' -L "$SITE/$1")
+            title=$(grep -o '<title>[^<]*' /tmp/p.html | head -1 | cut -c8-)
+            legacy=$(grep -c 'legacyTarget' /tmp/p.html || true)
+            echo "$first → $final  /$1  ·  $title$( [ "$legacy" != "0" ] && echo '  · (404.html troca pelo endereço novo antes de abrir o app)')"
+            [ "$final" = "$2" ] || { echo "::error::/$1 terminou em $final (esperado $2)"; fail=1; }
+          }
+          for r in "" inicio inicio/ viagens viagens/ explorar explorar/ gastos gastos/ perfil perfil/ nova-viagem nova-viagem/ \
+                   "roteiro/?id=ID_INVALIDO" "convite/?c=CODIGO_INVALIDO" entrar/ criar-conta/ "viagem/?id=t1_teste" \
+                   privacidade.html termos.html og-image.png favicon.png manifest.json robots.txt sitemap.xml; do check "$r" 200; done
+          # endereços antigos e inexistentes: o GitHub Pages responde 404 com o 404.html (que é o app)
+          for r in convite/CODIGO_INVALIDO convite/CODIGO_INVALIDO/ viagem/ID_INVALIDO endereco-que-nao-existe; do check "$r" 404; done
           for js in $(curl -s "$SITE/viagens/" | grep -o '/[^"]*_expo/static/js/web/[^"]*\.js' | sort -u); do
-            code=$(curl -s -o /dev/null -w '%{http_code}' "$(echo "$SITE" | grep -o '^https://[^/]*')$js"); echo "$code  $js"; [ "$code" = "200" ] || fail=1
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$host$js"); echo "$code  $js"; [ "$code" = "200" ] || fail=1
           done
           exit $fail
       - name: Testes de tela no endereço real (Chromium, Firefox e Safari)
@@ -45,3 +59,8 @@ jobs:
           docker run --rm --ipc=host --network host -v /tmp/e2e:/e2e -w /e2e mcr.microsoft.com/playwright:v1.56.0-noble bash -c "
             npm install --no-save --no-audit --no-fund playwright@1.56.0 > /dev/null &&
             node smoke.mjs $SITE/"
+      - name: Link público de verdade (conta de teste temporária, janela anônima nos 3 navegadores)
+        run: |
+          cp app/tests-e2e/public-link.mjs /tmp/e2e/
+          docker run --rm --ipc=host --network host -e GITHUB_RUN_ID -v /tmp/e2e:/e2e -w /e2e mcr.microsoft.com/playwright:v1.56.0-noble bash -c "
+            node public-link.mjs $SITE/ ${{ inputs.manter_link && 'manter' || '' }}"

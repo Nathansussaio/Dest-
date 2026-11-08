@@ -53,3 +53,28 @@ test('endereço que não existe: tela amigável (não página branca)', () => {
   assert.deepEqual(parseRoute('/viagem/'), { unknown: true });
   assert.deepEqual(parseRoute('/%E0%A4%A'), { unknown: true });
 });
+
+test('404.html: endereços antigos viram o formato novo (com e sem barra no fim)', async () => {
+  const { legacyTarget } = await import('../src/lib/routes');
+  assert.equal(legacyTarget('/viagem/t1_mw7a2q6r', ''), 'viagem/?id=t1_mw7a2q6r');
+  assert.equal(legacyTarget('/viagem/t1_mw7a2q6r/', ''), 'viagem/?id=t1_mw7a2q6r');
+  assert.equal(legacyTarget('/viagem/t1_x/roteiro/3', ''), 'viagem/?id=t1_x&tela=roteiro&dia=3');
+  assert.equal(legacyTarget('/viagem/t1_x/mapa', ''), 'viagem/?id=t1_x&tela=mapa');
+  assert.equal(legacyTarget('/convite/GJF5TM33', ''), 'convite/?c=GJF5TM33');
+  assert.equal(legacyTarget('/convite/GJF5TM33/', ''), 'convite/?c=GJF5TM33');
+  assert.equal(legacyTarget('/roteiro/abc123def456', ''), 'roteiro/?id=abc123def456');
+  assert.equal(legacyTarget('/lugar/l12', ''), 'lugar/?id=l12');
+  /* o resto não é endereço antigo: o app mostra "Página não encontrada" */
+  assert.equal(legacyTarget('/qualquer-coisa', ''), null);
+  assert.equal(legacyTarget('/convite/A/B', ''), null);
+  assert.equal(legacyTarget('/viagens/extra', ''), null);
+  assert.equal(legacyTarget('/%E0%A4%A', ''), null);
+  /* a função vai copiada para dentro do 404.html: precisa funcionar sozinha */
+  const alone = new Function('return (' + legacyTarget.toString() + ')')();
+  assert.equal(alone('/convite/ABC12345', ''), 'convite/?c=ABC12345');
+});
+
+test('convite aberto: o endereço fica no convite', () => {
+  assert.equal(pathFor(st({ user: false, inviteView: 'GJF5TM33' })), 'convite/?c=GJF5TM33');
+  assert.equal(pathFor(st({ inviteView: 'GJF5TM33' })), 'convite/?c=GJF5TM33');
+});

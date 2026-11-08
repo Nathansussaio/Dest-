@@ -4,7 +4,7 @@
    Uso (depois do expo export): npx tsx tools/static-routes.ts dist https://endereco-do-site */
 import fs from 'fs';
 import path from 'path';
-import { STATIC_DIRS } from '../src/lib/routes';
+import { STATIC_DIRS, legacyTarget } from '../src/lib/routes';
 
 const dist = process.argv[2] || 'dist';
 const site = (process.argv[3] || '%SITE_URL%').replace(/\/+$/, '');
@@ -37,6 +37,17 @@ for (const r of STATIC_DIRS) {
   fs.writeFileSync(path.join(dist, r.dir, 'index.html'), h);
   n++;
 }
-/* 404.html (endereço que não existe): mesma página, sem entrar na busca; o app mostra "Página não encontrada" */
-fs.writeFileSync(path.join(dist, '404.html'), src.replace(/<meta name="robots" content="[^"]*"/, '<meta name="robots" content="noindex"').replace(/<main class="pre">[\s\S]*?<\/main>/, '<main class="pre" aria-busy="true"><p style="font:15px -apple-system,Segoe UI,Roboto,sans-serif;color:#5F6166;text-align:center;margin-top:30vh">Carregando o Destí…</p></main>'));
+/* 404.html (endereço que não existe no GitHub Pages):
+   1) endereço antigo (/viagem/<id>, /convite/<código>…): troca na hora pelo novo, antes de carregar o app;
+   2) qualquer outro: o app abre e mostra "Página não encontrada". Não entra na busca do Google. */
+let base = '';
+try { base = new URL(site).pathname.replace(/\/+$/, ''); } catch { base = ''; }
+const redirect = '<script>(function(){var b=' + JSON.stringify(base) + ',p=location.pathname;if(p.indexOf(b+"/")!==0)return;' +
+  'var t=(' + legacyTarget.toString() + ')(p.slice(b.length),location.search);' +
+  'if(t)location.replace(b+"/"+t+location.hash);})();</script>';
+const nf = src
+  .replace(/<meta name="robots" content="[^"]*"/, '<meta name="robots" content="noindex"')
+  .replace(/<main class="pre">[\s\S]*?<\/main>/, '<main class="pre" aria-busy="true"><p style="font:15px -apple-system,Segoe UI,Roboto,sans-serif;color:#5F6166;text-align:center;margin-top:30vh">Carregando o Destí…</p></main>')
+  .replace(/<head>/, '<head>' + redirect);
+fs.writeFileSync(path.join(dist, '404.html'), nf);
 console.log('páginas por tela:', n, '+ 404.html');

@@ -51,6 +51,15 @@ Para ligar, rode uma vez o arquivo `schema-publico.sql` em **SQL Editor › New 
 
 Só quem tem conta cria links (até 100 por pessoa). O link se atualiza sozinho quando a viagem muda e pode ser desativado em Compartilhar roteiro.
 
+## Atualização de 8/11/2026: convites e links antigos
+
+Rode uma vez `atualizar-convites-e-links.sql` (ou os arquivos `schema-grupo.sql` e `schema-publico.sql` inteiros de novo). Ele cria:
+
+- `invite_info`: mostra a viagem antes de aceitar um convite (só para quem tem conta);
+- `public_id_for_trip`: quando alguém abre um link antigo de viagem que tem link público, o site abre o roteiro público.
+
+Sem essa atualização, o site continua funcionando: o convite aparece sem os detalhes da viagem, e o link antigo de viagem mostra "Viagem não encontrada".
+
 ## Onde ficam as viagens
 
 Cada pessoa tem uma linha na tabela `vaults`, com todas as viagens dela num único campo.

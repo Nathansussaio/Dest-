@@ -18,7 +18,7 @@ import { Create, Created, TripScreen, Itinerary, AddPlace, MapScreen, PlaceScree
 import { Expenses, Docs, Assistant } from './src/screens/money';
 import { SheetHost } from './src/screens/sheets';
 import { TopNav, SiteHeader, Landing } from './src/screens/site';
-import { NotFound, PublicTripPage } from './src/screens/public';
+import { NotFound, PublicTripPage, InvitePage } from './src/screens/public';
 
 const SCREENS: Record<Screen, React.ComponentType> = {
   home: Home, trips: Trips, explore: Explore, expenses: Expenses, profile: Profile,
@@ -104,6 +104,17 @@ function Root() {
 
   const Body = s.user ? SCREENS[s.screen] || Home : AuthRouter;
   const showTabs = !!s.user && WITH_TABS.indexOf(s.screen) >= 0;
+  if (site && s.inviteView && !s.publicView) {
+    /* convite para editar junto: mostra a viagem e pede para aceitar ou recusar */
+    return (
+      <View style={{ flex: 1, backgroundColor: c.bg }}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <InvitePage code={s.inviteView} />
+        <SheetHost />
+        <Toast />
+      </View>
+    );
+  }
   if (site && s.publicView) {
     /* roteiro compartilhado por link: abre para qualquer pessoa, com ou sem conta */
     return (

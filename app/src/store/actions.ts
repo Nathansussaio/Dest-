@@ -22,18 +22,18 @@ const S = getState;
 
 /* ---------- Navegação ---------- */
 export function go(screen: Screen, extra: Partial<ReturnType<typeof S>> = {}) {
-  setState((s) => ({ history: s.history.concat([s.screen]), screen, sheet: null, notFound: null, publicView: null, ...extra }));
+  setState((s) => ({ history: s.history.concat([s.screen]), screen, sheet: null, notFound: null, publicView: null, inviteView: null, ...extra }));
 }
 export function back(): boolean {
   const s = S();
   if (s.sheet) { setState({ sheet: null }); return true; }
-  if (s.notFound || s.publicView) { setState({ notFound: null, publicView: null }); return true; }
+  if (s.notFound || s.publicView || s.inviteView) { setState({ notFound: null, publicView: null, inviteView: null }); return true; }
   if (!s.user) { if (s.auth !== 'welcome') { setState({ auth: 'welcome' }); return true; } return false; }
   if (s.history.length) { const h = s.history.slice(); const prev = h.pop()!; setState({ screen: prev, history: h }); return true; }
   if (s.screen !== 'home') { setState({ screen: 'home', history: [] }); return true; }
   return false;
 }
-export function tab(id: Screen, extra: Partial<ReturnType<typeof S>> = {}) { setState({ screen: id, history: [], sheet: null, notFound: null, publicView: null, ...extra }); }
+export function tab(id: Screen, extra: Partial<ReturnType<typeof S>> = {}) { setState({ screen: id, history: [], sheet: null, notFound: null, publicView: null, inviteView: null, ...extra }); }
 export function openSheet(sheet: Sheet, arg: any = null) { setState({ sheet, sheetArg: arg }); }
 export function closeSheet() { setState({ sheet: null, sheetArg: null }); }
 export function openTrip(id: string, screen: Screen = 'trip') { go(screen, { tripId: id, day: 0 }); }
@@ -389,6 +389,13 @@ export async function joinByCode(code: string): Promise<string | null> {
   setState({ sheet: null, sheetArg: null });
   if (t) { openTrip(t.id); showToast('Você entrou na viagem ' + t.name); }
   return null;
+}
+/* convite recusado: nada muda nas viagens; o código guardado é esquecido */
+export function declineInvite() {
+  G.takePendingInvite();
+  setState({ inviteView: null });
+  if (S().user) tab('trips'); else setState({ auth: 'welcome' });
+  showToast('Convite recusado. Nada mudou nas suas viagens.');
 }
 export async function leaveGroup(): Promise<string | null> {
   const t = currentTrip(); if (!t) return null;

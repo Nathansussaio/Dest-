@@ -144,6 +144,26 @@ begin
   end if;
 end $$;
 
+-- Ver o convite antes de aceitar (só com conta): nome da viagem, datas, quem convidou e quantas pessoas.
+-- Devolve nada quando o código não existe (ou a viagem deixou de ser compartilhada).
+create or replace function public.invite_info(invite text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object(
+    'trip_id', s.id,
+    'name', s.data->'trip'->>'name',
+    'country', s.data->'trip'->>'country',
+    'start', s.data->'trip'->>'start',
+    'end', s.data->'trip'->>'end',
+    'by', coalesce((select m.name from public.trip_members m where m.trip_id = s.id and m.user_id = i.created_by), ''),
+    'people', (select count(*) from public.trip_members m where m.trip_id = s.id),
+    'member', exists (select 1 from public.trip_members m where m.trip_id = s.id and m.user_id = auth.uid())
+  )
+  from public.trip_invites i join public.shared_trips s on s.id = i.trip_id
+  where i.code = upper(trim(invite)) and auth.uid() is not null;
+$$;
+revoke all on function public.invite_info(text) from public, anon;
+grant execute on function public.invite_info(text) to authenticated;
+
 -- ============================================================
 -- Link público do roteiro (o mesmo conteúdo de schema-publico.sql)
 -- ============================================================
@@ -186,3 +206,11 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.get_public_trip(text) from public;
 grant execute on function public.get_public_trip(text) to anon, authenticated;
+
+-- link antigo de viagem (/viagem/<id>) aberto por outra pessoa: se a viagem tem link público, devolve o id dele
+create or replace function public.public_id_for_trip(tid text) returns text
+language sql stable security definer set search_path = public as $$
+  select id from public.public_trips where trip_id = tid order by updated_at desc limit 1;
+$$;
+revoke all on function public.public_id_for_trip(text) from public;
+grant execute on function public.public_id_for_trip(text) to anon, authenticated;

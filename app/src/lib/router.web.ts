@@ -6,6 +6,7 @@ import * as A from '../store/actions';
 import { SITE_URL } from '../config';
 import { PLACE_BY_ID } from '../data';
 import { setPendingInvite } from '../store/shared';
+import { cloudPublicIdForTrip, cloud } from './backend';
 import { pathFor as pathOf, parseRoute, type Route } from './routes';
 
 const TABS: Screen[] = ['home', 'trips', 'explore', 'expenses', 'profile'];
@@ -22,13 +23,18 @@ function basePath(): string {
 }
 type St = ReturnType<typeof getState>;
 export function pathFor(s: St): string {
-  return pathOf({ user: !!s.user, auth: s.auth, screen: s.screen, tripId: s.tripId, day: s.day, placeId: s.placeId, publicView: s.publicView });
+  return pathOf({ user: !!s.user, auth: s.auth, screen: s.screen, tripId: s.tripId, day: s.day, placeId: s.placeId, publicView: s.publicView, inviteView: s.inviteView });
 }
 /* título da aba (o roteiro público define o próprio, com destino e datas) */
 let publicTitle = '';
 export function setPublicTitle(t: string) { publicTitle = t; if (typeof document !== 'undefined' && getState().publicView) document.title = t; }
+let inviteTitle = '';
+export function setInviteTitle(t: string) { inviteTitle = t; if (typeof document !== 'undefined' && getState().inviteView) document.title = t; }
 export function titleFor(s: St): string {
   if (s.publicView) return publicTitle || 'Roteiro compartilhado · Destí';
+  if (s.inviteView) return inviteTitle || 'Convite para viagem · Destí';
+  if (s.notFound === 'checking') return 'Procurando a viagem · Destí';
+  if (s.notFound === 'private') return 'Viagem particular · Destí';
   if (s.notFound) return (s.notFound === 'trip' ? 'Viagem não encontrada' : s.notFound === 'place' ? 'Lugar não encontrado' : 'Página não encontrada') + ' · Destí';
   if (!s.user) return s.auth === 'login' ? 'Entrar · Destí' : s.auth === 'signup' ? 'Criar conta · Destí' : s.auth === 'forgot' ? 'Esqueci a senha · Destí' : HOME_TITLE;
   const t = s.tripId ? s.trips.find((x) => x.id === s.tripId) : null;
@@ -49,16 +55,30 @@ function apply(r: Route | null, pushHistory: boolean): boolean {
   if (!r) return false;
   if (r.unknown) { setState({ notFound: 'page', publicView: null, sheet: null }); return true; }
   /* roteiro compartilhado: abre para qualquer pessoa, com ou sem conta */
-  if (r.publicId) { setState({ publicView: r.publicId, notFound: null, sheet: null }); return true; }
-  /* convite para viagem em grupo: com conta, entra direto; sem conta, entra depois de fazer login */
+  if (r.publicId) { setState({ publicView: r.publicId, inviteView: null, notFound: null, sheet: null }); return true; }
+  /* convite para editar junto: página própria (mostra a viagem e pede para aceitar ou recusar).
+     O código fica guardado: sem conta, a pessoa entra ou cria a conta e volta para o convite. */
   if (r.invite) {
-    const code = r.invite;
-    if (s.user && s.user.id) { A.joinByCode(code).then((e) => { if (e) A.showToast(e); }); }
-    else { setPendingInvite(code); if (!s.user) setState({ auth: 'login' }); A.showToast(s.user ? 'Para editar junto, entre com uma conta' : 'Entre ou crie sua conta para participar da viagem'); }
+    setPendingInvite(r.invite);
+    setState({ inviteView: r.invite, publicView: null, notFound: null, sheet: null });
     return true;
   }
   if (r.auth) { if (!s.user) { setState({ auth: r.auth }); return true; } return false; }
   if (!r.screen) return false;
+  /* viagem que não está neste aparelho: se ela tem link público, abre o roteiro público; senão, avisa */
+  if (r.tripId && (!s.user || !s.trips.some((t) => t.id === r.tripId))) {
+    if (!s.user) pending = r;
+    setState({ notFound: 'checking', publicView: null, sheet: null });
+    const tid = r.tripId;
+    const decide = (pid: string | null) => {
+      const now = getState();
+      if (now.notFound !== 'checking') return; /* a pessoa já foi para outra tela */
+      if (pid) setState({ notFound: null, publicView: pid });
+      else setState({ notFound: now.user ? 'trip' : 'private' });
+    };
+    if (cloud.enabled) cloudPublicIdForTrip(tid).then(decide); else decide(null);
+    return true;
+  }
   if (!s.user) {
     /* sem conta: guarda o destino e mostra a entrada; depois de entrar, abre a tela pedida */
     pending = r;
@@ -66,7 +86,6 @@ function apply(r: Route | null, pushHistory: boolean): boolean {
     return true;
   }
   const screen: Screen = r.screen === 'created' ? 'trip' : r.screen; /* a tela de viagem criada só existe logo depois de criar */
-  if (r.tripId && !s.trips.some((t) => t.id === r.tripId)) { setState({ notFound: 'trip', publicView: null, sheet: null }); return true; }
   if (screen === 'place' && (!r.placeId || !PLACE_BY_ID[r.placeId])) { setState({ notFound: 'place', publicView: null, sheet: null }); return true; }
   const extra: any = { screen, sheet: null, notFound: null, publicView: null };
   if (r.tripId) extra.tripId = r.tripId;
