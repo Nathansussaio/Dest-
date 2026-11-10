@@ -51,6 +51,10 @@ Para ligar, rode uma vez o arquivo `schema-publico.sql` em **SQL Editor › New 
 
 Só quem tem conta cria links (até 100 por pessoa). O link se atualiza sozinho quando a viagem muda e pode ser desativado em Compartilhar roteiro.
 
+## Atualização de novembro/2026 (um arquivo só)
+
+Quem já rodou o `schema.sql`, o `schema-grupo.sql` e o `schema-publico.sql` antes pode rodar só `atualizar-tudo.sql`: ele junta as duas atualizações abaixo.
+
 ## Atualização de 8/11/2026: convites e links antigos
 
 Rode uma vez `atualizar-convites-e-links.sql` (ou os arquivos `schema-grupo.sql` e `schema-publico.sql` inteiros de novo). Ele cria:
