@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Pressable } from 'react-native';
 import { useApp, setState } from '../store/store';
+import { takePendingInvite } from '../store/shared';
 import * as A from '../store/actions';
 import { T, Row, Grow, Gap, Btn, Icon, Card, Note, Logo, Screen, Pill } from '../ui';
 import { useTheme, useNarrow, usePad } from '../theme/useTheme';
@@ -24,26 +25,27 @@ export function NotFound() {
   const { c } = useTheme();
   const kind = s.notFound || 'page';
   if (kind === 'checking') return <Screen><View accessibilityRole="progressbar" style={{ alignItems: 'center', paddingVertical: 80, gap: 10 }}><Icon name="compass" size={32} color={c.acc} /><T v="muted">Procurando a viagem…</T></View></Screen>;
-  if (kind === 'private') {
+  const back = () => { try { if (typeof window !== 'undefined' && window.history.length > 1) { window.history.back(); return; } } catch { /* ignora */ } if (s.user) A.tab('home'); else setState({ notFound: null, auth: 'welcome' }); };
+  if (kind === 'private' || kind === 'trip') {
     return (
       <Screen>
-        <View accessibilityRole="alert" style={{ alignItems: 'center', paddingVertical: 48, gap: 12, maxWidth: 520, alignSelf: 'center' }}>
-          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: c.accTint, alignItems: 'center', justifyContent: 'center' }}><Icon name="lock" size={32} color={c.acc} /></View>
-          <T v="h1" center>Esta viagem é particular</T>
-          <T v="muted" center>Só quem organiza consegue abrir este endereço. Se a viagem é sua, entre na conta para abrir. Se alguém te mandou este link, peça o link do roteiro público (Compartilhar roteiro público).</T>
+        <View accessibilityRole="alert" style={{ alignItems: 'center', paddingVertical: 48, gap: 12, maxWidth: 540, alignSelf: 'center' }}>
+          <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: c.accTint, alignItems: 'center', justifyContent: 'center' }}><Icon name="suitcase" size={32} color={c.acc} /></View>
+          <T v="h1" center>Viagem não encontrada</T>
+          <T v="muted" center>Esta viagem não existe, foi removida ou ainda está disponível apenas no aparelho onde foi criada. Suas outras viagens continuam salvas.</T>
+          {kind === 'private' ? <T v="smallMuted" center>Se a viagem é sua e está na sua conta, entre para abrir. Se alguém te mandou este link, peça o link do roteiro público.</T> : null}
           <Gap h={8} />
           <Row gap={10} style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
-            <Btn label="Entrar na minha conta" onPress={() => setState({ notFound: null, auth: 'login' })} />
-            <Btn kind="secondary" label="Montar meu próprio roteiro" onPress={() => setState({ notFound: null, auth: 'signup' })} />
+            <Btn kind="secondary" icon="chevL" label="Voltar" onPress={back} />
+            {s.user ? <Btn kind="secondary" icon="suitcase" label="Minhas viagens" onPress={() => A.tab('trips')} /> : <Btn kind="secondary" label="Entrar" onPress={() => setState({ notFound: null, auth: 'login' })} />}
+            <Btn icon="plus" label="Criar nova viagem" onPress={() => { if (s.user) { setState({ notFound: null }); A.go('create'); } else setState({ notFound: null, auth: 'welcome' }); }} />
           </Row>
         </View>
       </Screen>
     );
   }
-  const title = kind === 'trip' ? 'Viagem não encontrada' : kind === 'place' ? 'Lugar não encontrado' : 'Página não encontrada';
-  const text = kind === 'trip'
-    ? 'Esta viagem não está neste aparelho nem na sua conta. Ela pode ter sido excluída, ou estar salva em outro aparelho ou outra conta. Suas outras viagens continuam salvas.'
-    : kind === 'place'
+  const title = kind === 'place' ? 'Lugar não encontrado' : 'Página não encontrada';
+  const text = kind === 'place'
       ? 'Este lugar não existe mais no catálogo do Destí. Suas viagens e lugares salvos não foram alterados.'
       : 'O endereço que você abriu não existe no Destí. Pode ter sido digitado errado ou ser um link antigo. Nada foi apagado.';
   return (
@@ -55,10 +57,11 @@ export function NotFound() {
         <Gap h={8} />
         {s.user ? (
           <Row gap={10} style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Btn kind="secondary" icon="chevL" label="Voltar" onPress={back} />
             <Btn icon="suitcase" label="Minhas viagens" onPress={() => A.tab('trips')} />
             <Btn kind="secondary" icon="home" label="Início" onPress={() => A.tab('home')} />
           </Row>
-        ) : <Btn icon="home" label="Ir para a página inicial" onPress={() => setState({ notFound: null, auth: 'welcome' })} />}
+        ) : <Row gap={10} style={{ flexWrap: 'wrap', justifyContent: 'center' }}><Btn kind="secondary" icon="chevL" label="Voltar" onPress={back} /><Btn icon="home" label="Ir para a página inicial" onPress={() => setState({ notFound: null, auth: 'welcome' })} /></Row>}
       </View>
     </Screen>
   );
@@ -103,7 +106,8 @@ export function PublicTripPage({ id }: { id: string }) {
   const s = useApp();
   /* sair do roteiro público: volta para a página anterior do navegador ou para o Destí */
   const goBack = () => { try { if (typeof window !== 'undefined' && window.history.length > 1) { window.history.back(); return; } } catch { /* ignora */ } setState({ publicView: null }); if (!s.user) setState({ auth: 'welcome' }); };
-  const mine = () => { setState({ publicView: null }); if (s.user) A.tab('create'); else setState({ auth: 'signup' }); };
+  const mine = () => { setState({ publicView: null }); if (s.user) A.go('create'); else setState({ auth: 'welcome' }); };
+  const myTrips = () => { setState({ publicView: null }); if (s.user) A.tab('trips'); else setState({ auth: 'login' }); };
   const d = load.st === 'ok' ? load.d : null;
   useEffect(() => {
     if (d) { const a = parseD(d.start), b = parseD(d.end); setPublicTitle('Roteiro: ' + d.name + ' · ' + a.getDate() + '/' + (a.getMonth() + 1) + ' a ' + b.getDate() + '/' + (b.getMonth() + 1) + ' · Destí'); }
@@ -121,6 +125,7 @@ export function PublicTripPage({ id }: { id: string }) {
       <Gap h={6} />
       <Row gap={10} style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
         <Btn kind="secondary" icon="chevL" label="Voltar" onPress={goBack} />
+        <Btn kind="secondary" icon="suitcase" label="Minhas viagens" onPress={myTrips} />
         <Btn label="Montar meu próprio roteiro" onPress={mine} />
       </Row>
     </View>
@@ -221,13 +226,13 @@ export function InvitePage({ code }: { code: string }) {
     setInv({ st: 'loading' });
     cloudInviteInfo(code).then((r) => {
       if (r === undefined) setInv({ st: 'offline' });
-      else if (r === null) setInv({ st: 'missing' });
+      else if (r === null) { takePendingInvite(); setInv({ st: 'missing' }); } /* código inválido: não guarda mais */
       else setInv({ st: 'ok', info: r === 'old' ? null : r });
     });
   };
   useEffect(load, [code, account]);
   useEffect(() => { setInviteTitle(inv.st === 'missing' ? 'Convite não encontrado · Destí' : 'Convite para viagem · Destí'); }, [inv.st]);
-  const accept = async () => { if (busy) return; setBusy(true); setErr(''); const e = await A.joinByCode(code); setBusy(false); if (e) { if (/não encontrado|expirado/i.test(e)) setInv({ st: 'missing' }); else setErr(e); } };
+  const accept = async () => { if (busy) return; setBusy(true); setErr(''); const e = await A.joinByCode(code); setBusy(false); if (e) { if (/não encontrado|expirado/i.test(e)) { takePendingInvite(); setInv({ st: 'missing' }); } else setErr(e); } };
   const box = (icon: string, title: string, text: string, actions: React.ReactNode) => (
     <View accessibilityRole="alert" style={{ alignItems: 'center', paddingVertical: 48, gap: 12, maxWidth: 560, alignSelf: 'center', width: '100%' }}>
       <View style={{ width: 72, height: 72, borderRadius: 36, backgroundColor: c.accTint, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={32} color={c.acc} /></View>
@@ -239,11 +244,11 @@ export function InvitePage({ code }: { code: string }) {
   );
   let body: React.ReactNode;
   if (!s.user) {
-    body = box('users', 'Convite para viagem', 'Você foi convidado para montar uma viagem junto no Destí. Entre ou crie uma conta para participar: o convite fica guardado e aparece de novo logo depois.', (
+    body = box('users', 'Convite para viagem', 'Você foi convidado para montar uma viagem junto no Destí. Para editar junto, entre ou crie uma conta. O código do convite será preservado e aparece de novo logo depois.', (
       <Row gap={10} style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
         <Btn label="Criar conta" onPress={() => setState({ inviteView: null, auth: 'signup' })} />
         <Btn kind="secondary" label="Já tenho conta" onPress={() => setState({ inviteView: null, auth: 'login' })} />
-        <Btn kind="ghost" label="Agora não" onPress={A.declineInvite} />
+        <Btn kind="ghost" label="Agora não" onPress={A.laterInvite} />
       </Row>
     ));
   } else if (!account) {
@@ -251,7 +256,7 @@ export function InvitePage({ code }: { code: string }) {
       <Row gap={10} style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
         <Btn label="Criar conta" onPress={() => { setState({ inviteView: null }); A.guestToSignup(); }} />
         <Btn kind="secondary" label="Já tenho conta" onPress={() => { setState({ inviteView: null }); A.guestToLogin(); }} />
-        <Btn kind="ghost" label="Agora não" onPress={A.declineInvite} />
+        <Btn kind="ghost" label="Agora não" onPress={A.laterInvite} />
       </Row>
     ));
   } else if (inv.st === 'loading') {
@@ -265,7 +270,7 @@ export function InvitePage({ code }: { code: string }) {
     ));
   } else if (inv.st === 'offline') {
     body = box('cloudRain', 'Sem conexão', 'Não deu para conferir o convite agora. Confira a internet e tente de novo; o convite continua guardado.', (
-      <Row gap={10} style={{ flexWrap: 'wrap', justifyContent: 'center' }}><Btn icon="refresh" label="Tentar de novo" onPress={load} /><Btn kind="secondary" label="Agora não" onPress={A.declineInvite} /></Row>
+      <Row gap={10} style={{ flexWrap: 'wrap', justifyContent: 'center' }}><Btn icon="refresh" label="Tentar de novo" onPress={load} /><Btn kind="secondary" label="Agora não" onPress={A.laterInvite} /></Row>
     ));
   } else {
     const i = inv.info;

@@ -10,7 +10,7 @@ import {
   Section, ListRow, List, Empty, TopBar, Screen, Cover, Bar, PlaceThumb, Avatar, Pill, Cols, Grid
 , Picklist, RangeCalendar, shadow as shadowStyle } from '../ui';
 import { useTheme, useSite, useSiteWide, usePad, SITE_MAX } from '../theme/useTheme';
-import { tripInfo, PlaceCard, NoTrip } from './common';
+import { tripInfo, PlaceCard, NoTrip, GuestNote } from './common';
 import { PlacesMap } from './maps/PlacesMap';
 import { prefetchMap } from '../lib/prefetchMap';
 import { useForecast } from '../lib/forecast';
@@ -410,6 +410,7 @@ export function Create() {
     const sticky: any = { position: 'sticky', top: 24 };
     return (
       <Screen tabs={false}>
+        <GuestNote />
         {head}
         <View style={{ flexDirection: 'row', gap: 32, alignItems: 'flex-start' }}>
           <View style={{ width: mainW, gap: 24 }}>
@@ -429,6 +430,7 @@ export function Create() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <Screen tabs={false}>
+        <GuestNote />
         {head}
         <View style={{ gap: 16 }}>{b1}{b2}{b3}{b4}</View>
       </Screen>
@@ -528,6 +530,7 @@ export function Created() {
     /* site em tela larga: cabeçalho com as ações e o roteiro em grade, um cartão por dia */
     return (
       <Screen tabs={false}>
+        <GuestNote variant="created" />
         <Row between top style={{ flexWrap: 'wrap', gap: 20, marginTop: 8 }}>
           <Row gap={16}>
             <TileIcon name="check" size={56} />
@@ -567,6 +570,7 @@ export function Created() {
   }
   return (
     <Screen tabs={false}>
+        <GuestNote variant="created" />
       <View style={{ alignItems: 'center', marginTop: 20, gap: 10 }}>
         <TileIcon name="check" size={64} />
         <T v="h1" center>Viagem criada</T>
@@ -674,6 +678,7 @@ export function TripScreen() {
             </View>
           ))}
         </Card>
+        <GuestNote variant="trip" style={{ marginTop: 14, marginBottom: 0 }} />
 
         {isMultiCity(t) ? (() => {
           const legsT = tripLegs(t);

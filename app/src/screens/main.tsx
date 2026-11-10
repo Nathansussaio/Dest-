@@ -10,7 +10,7 @@ import {
 } from '../ui';
 import { useTheme, useWide, useSite, useSiteWide, useNarrow, usePad } from '../theme/useTheme';
 import { isWeb } from '../theme/theme';
-import { TripHero, TripRow, PlaceCard, DestCard, tripInfo } from './common';
+import { TripHero, TripRow, PlaceCard, DestCard, tripInfo, GuestNote } from './common';
 import {
   DESTINATIONS, DEST_BY_ID, FEATURED, PLACES, CATEGORIES, CITY_NAME, STYLE_INFO, STYLES, SLOT_LABEL, hasCatalog,
   placesForCity, searchDest, PLACE_BY_ID
@@ -86,6 +86,7 @@ export function Home() {
   );
   return (
     <Screen>
+      <GuestNote />
       {wide || site ? null : <View style={{ marginBottom: 14 }}><Logo size={30} textSize={24} /></View>}
       <Row between style={{ marginBottom: 20 }}>
         <Grow>
@@ -119,7 +120,18 @@ export function Trips() {
       <Seg value={tabId} onChange={setTab} options={[{ id: 'next', label: 'Próximas (' + up.length + ')' }, { id: 'past', label: 'Anteriores (' + past.length + ')' }]} />
       {CLOUD_ENABLED && s.user && s.user.id ? <Row style={{ marginTop: 10 }}><Btn sm kind="secondary" icon="users" label="Entrar com código de convite" onPress={() => A.openSheet('join')} /></Row> : null}
       <Gap h={16} />
-      {list.length ? <Grid items={list} min={340} render={(t) => <TripRow t={t} s={s} />} /> : (
+      {s.user && s.user.method === 'guest' && s.trips.length ? <GuestNote /> : null}
+      {list.length ? <Grid items={list} min={340} render={(t) => <TripRow t={t} s={s} />} /> : s.user && s.user.method === 'guest' && tabId === 'next' && !s.trips.length ? (
+        <Card style={{ alignItems: 'center', padding: 28, gap: 10 }}>
+          <T v="lt" center>Nenhuma viagem neste aparelho.</T>
+          <T v="smallMuted" center>No modo visitante, as viagens ficam salvas só neste navegador. Entre ou crie uma conta para acessar viagens de outros dispositivos.</T>
+          <Row gap={8} style={{ flexWrap: 'wrap', justifyContent: 'center' }}>
+            <Btn sm icon="plus" label="Criar viagem" onPress={() => A.go('create')} />
+            <Btn sm kind="secondary" label="Entrar" onPress={A.guestToLogin} />
+            <Btn sm kind="secondary" label="Criar conta" onPress={A.guestToSignup} />
+          </Row>
+        </Card>
+      ) : (
         <Empty icon="suitcase" title={tabId === 'next' ? 'Nenhuma viagem marcada' : 'Nenhuma viagem anterior'}
           text={tabId === 'next' ? 'Crie uma viagem para organizar roteiro, mapa e orçamento.' : 'Viagens concluídas aparecem aqui automaticamente.'}
           action={tabId === 'next' ? 'Criar viagem' : undefined} onAction={() => A.go('create')} />

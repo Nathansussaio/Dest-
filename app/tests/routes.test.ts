@@ -50,7 +50,9 @@ test('endereço que não existe: tela amigável (não página branca)', () => {
   assert.deepEqual(parseRoute('/qualquer-coisa'), { unknown: true });
   assert.deepEqual(parseRoute('/viagens/extra/coisa'), { unknown: true });
   assert.deepEqual(parseRoute('/roteiro/'), { unknown: true });
-  assert.deepEqual(parseRoute('/viagem/'), { unknown: true });
+  assert.deepEqual(parseRoute('/viagem/'), { screen: 'trips' });
+  assert.deepEqual(parseRoute('/convite/'), { screen: 'trips', join: true });
+  assert.deepEqual(parseRoute('/convite/', '?c=abc123'), { invite: 'ABC123', legacy: false });
   assert.deepEqual(parseRoute('/%E0%A4%A'), { unknown: true });
 });
 

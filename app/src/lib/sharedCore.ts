@@ -25,6 +25,7 @@ export function toShared(p: LocalPart, myId: string): SharedPayload {
   const trip: any = { ...m.trip };
   delete trip.shared;
   delete trip.publicId;
+  delete trip.publicToken;
   return {
     v: 1, trip,
     expenses: m.expenses.map((e) => ({ ...e, receipt: null })),

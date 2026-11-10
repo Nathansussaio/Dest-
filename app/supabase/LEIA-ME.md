@@ -60,6 +60,15 @@ Rode uma vez `atualizar-convites-e-links.sql` (ou os arquivos `schema-grupo.sql`
 
 Sem essa atualização, o site continua funcionando: o convite aparece sem os detalhes da viagem, e o link antigo de viagem mostra "Viagem não encontrada".
 
+## Link público no modo visitante (sem conta)
+
+Rode uma vez `schema-publico-visitante.sql` (depois do `schema-publico.sql`). Ele deixa o visitante publicar o roteiro sem conta:
+
+- `publish_guest_trip`: cria o link e devolve uma chave secreta (o banco guarda só o resumo dela);
+- `update_guest_trip` e `delete_guest_trip`: atualizam ou desativam o link com essa chave, que fica só no aparelho do visitante.
+
+Proteções: só o roteiro (até 200 KB) e no máximo 300 links novos de visitantes por hora no total. Sem esse arquivo, o site oferece "Criar conta e publicar roteiro".
+
 ## Onde ficam as viagens
 
 Cada pessoa tem uma linha na tabela `vaults`, com todas as viagens dela num único campo.

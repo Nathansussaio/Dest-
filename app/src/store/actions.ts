@@ -17,6 +17,7 @@ import { passProblem } from '../lib/auth';
 import { hashPassword } from '../lib/hash';
 import { ensureNotifPermission } from '../lib/device';
 import * as G from './shared';
+import * as P from './publicLinks';
 
 const S = getState;
 
@@ -390,6 +391,12 @@ export async function joinByCode(code: string): Promise<string | null> {
   if (t) { openTrip(t.id); showToast('Você entrou na viagem ' + t.name); }
   return null;
 }
+/* "Agora não": fecha o convite, mas o código continua guardado nesta aba (volta ao entrar na conta) */
+export function laterInvite() {
+  setState({ inviteView: null });
+  if (S().user) tab('trips'); else setState({ auth: 'welcome' });
+  showToast('O convite ficou guardado. Ele aparece de novo quando você entrar na conta.');
+}
 /* convite recusado: nada muda nas viagens; o código guardado é esquecido */
 export function declineInvite() {
   G.takePendingInvite();
@@ -531,9 +538,22 @@ function signIn(user: User, msg: string, fresh: boolean, first?: Screen) {
   showToast(carry && carry.trips.length ? msg + '. ' + (carry.trips.length === 1 ? 'A viagem do modo visitante veio junto.' : carry.trips.length + ' viagens do modo visitante vieram junto.') : msg);
   /* conta na nuvem: traz a versão mais recente (ou envia a deste aparelho, se for mais nova);
      as viagens do modo visitante entram depois, somadas às da conta (nunca no lugar delas) */
-  if (user.id) pullCloud().then(() => { if (carry) mergeGuest(carry); });
-  else if (carry) mergeGuest(carry);
+  if (user.id) pullCloud().then(() => {
+    if (carry) mergeGuest(carry);
+    if (carry && S().syncState === 'offline') showToast('Não foi possível sincronizar agora. Sua viagem continua salva neste aparelho e vai para a conta quando a conexão voltar.');
+    resumePublish();
+  });
+  else { if (carry) mergeGuest(carry); resumePublish(); }
 }
+/* "Criar conta e publicar roteiro": depois do cadastro, volta à viagem, abre Compartilhar e gera o link */
+function resumePublish() {
+  const tid = P.takePublishAfterSignup();
+  if (!tid || !S().trips.some((t) => t.id === tid)) return;
+  openTrip(tid);
+  setState({ sheet: 'share', sheetArg: null });
+  P.createPublicLink(tid).then((r) => { if (r.url) showToast('Roteiro publicado: o link está pronto para copiar.'); else if (r.error) showToast(r.error); });
+}
+export function signupAndPublish(tripId: string) { P.publishAfterSignup(tripId); guestToSignup(); }
 const LOCKED = 'Muitas tentativas seguidas. Aguarde 30 segundos e tente de novo.';
 function countFail() {
   const n = S().attempts + 1;

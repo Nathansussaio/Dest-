@@ -66,7 +66,8 @@ export function setState(patch: Partial<State> | ((s: State) => Partial<State>))
     const email = u.email, now = Date.now();
     state = { ...state, vault: { ...state.vault, [email]: pickData(state) }, vaultTime: { ...state.vaultTime, [email]: now } };
     persistSoon();
-    if (u.id) { cloudSoon(); if (dataHook) dataHook(); hooks.forEach((h) => h()); }
+    if (u.id) { cloudSoon(); if (dataHook) dataHook(); }
+    hooks.forEach((h) => h());
   } else if ('accounts' in p || 'vault' in p || 'user' in p || 'shareMeta' in p) persistSoon();
   listeners.forEach((l) => l());
 }

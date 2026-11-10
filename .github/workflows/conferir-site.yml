@@ -45,10 +45,13 @@ jobs:
             [ "$final" = "$2" ] || { echo "::error::/$1 terminou em $final (esperado $2)"; fail=1; }
           }
           for r in "" inicio inicio/ viagens viagens/ explorar explorar/ gastos gastos/ perfil perfil/ nova-viagem nova-viagem/ \
+                   viagem viagem/ "viagem/?id=ID_INVALIDO" "viagem/?id=ID_INVALIDO&" convite convite/ \
                    "roteiro/?id=ID_INVALIDO" "convite/?c=CODIGO_INVALIDO" entrar/ criar-conta/ "viagem/?id=t1_teste" \
                    privacidade.html termos.html og-image.png favicon.png manifest.json robots.txt sitemap.xml; do check "$r" 200; done
           # endereços antigos e inexistentes: o GitHub Pages responde 404 com o 404.html (que é o app)
-          for r in convite/CODIGO_INVALIDO convite/CODIGO_INVALIDO/ viagem/ID_INVALIDO endereco-que-nao-existe; do check "$r" 404; done
+          for r in convite/CODIGO_INVALIDO convite/CODIGO_INVALIDO/ viagem/ID_INVALIDO viagem/ID_INVALIDO/ viagem/t1_mw7a2q6r convite/GJF5TM33 endereco-que-nao-existe; do check "$r" 404; done
+          # o _redirects (para hospedagens com regras) foi publicado
+          check _redirects 200
           for js in $(curl -s "$SITE/viagens/" | grep -o '/[^"]*_expo/static/js/web/[^"]*\.js' | sort -u); do
             code=$(curl -s -o /dev/null -w '%{http_code}' "$host$js"); echo "$code  $js"; [ "$code" = "200" ] || fail=1
           done

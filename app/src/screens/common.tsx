@@ -1,5 +1,6 @@
 /* Peças compartilhadas entre telas: resumo de viagem, cartões de lugar e destino */
 import React from 'react';
+import { useApp } from '../store/store';
 import { travelersOf } from '../lib/group';
 import { View, Pressable } from 'react-native';
 import type { Trip, Place, Destination } from '../types';
@@ -121,6 +122,26 @@ export function NoTrip({ text }: { text?: string }) {
       <T v="lt" center>Nenhuma viagem ainda</T>
       <T v="smallMuted" center>{text || 'Crie uma viagem para usar esta parte do app.'}</T>
       <Btn sm label="Criar viagem" icon="plus" onPress={() => A.go('create')} />
+    </Card>
+  );
+}
+
+/* Modo visitante: aviso discreto de onde ficam os dados (não bloqueia nada) */
+export function GuestNote({ variant = 'default', style }: { variant?: 'default' | 'created' | 'trip'; style?: any }) {
+  const s = useApp();
+  const { c } = useTheme();
+  if (!s.user || s.user.method !== 'guest') return null;
+  const text = variant === 'created' || variant === 'trip'
+    ? 'Esta viagem está salva apenas neste aparelho. Crie uma conta para sincronizar, editar junto e acessar em outro dispositivo.'
+    : 'Sua viagem fica salva apenas neste aparelho e neste navegador. Para sincronizar entre dispositivos e editar junto com outras pessoas, crie uma conta.';
+  return (
+    <Card flat label="Modo visitante" style={[{ padding: 12, gap: 6, backgroundColor: c.accTint, marginBottom: 14 }, style]}>
+      <Row gap={8}><Icon name="lock" size={16} color={c.acc} /><T v="lt">Modo visitante</T></Row>
+      <T v="small">{text}</T>
+      <Row gap={8} style={{ flexWrap: 'wrap' }}>
+        <Btn sm label="Criar conta" onPress={A.guestToSignup} />
+        <Btn sm kind="ghost" label="Já tenho conta" onPress={A.guestToLogin} />
+      </Row>
     </Card>
   );
 }

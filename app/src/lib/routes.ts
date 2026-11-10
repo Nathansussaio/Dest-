@@ -30,6 +30,7 @@ export interface Route {
   invite?: string;          /* convite para editar junto (código) */
   publicId?: string;        /* roteiro compartilhado, só leitura */
   legacy?: boolean;         /* endereço antigo: trocar pelo novo */
+  join?: boolean;           /* /convite/ sem código: abre o campo para digitar o código */
   unknown?: boolean;        /* endereço que não existe */
 }
 
@@ -69,7 +70,7 @@ export function parseRoute(path: string, search = ''): Route | null {
   }
   if (head === 'convite') {
     const c = q.c || parts[1];
-    return c ? { invite: c, legacy: !q.c } : { unknown: true };
+    return c ? { invite: c.trim().toUpperCase(), legacy: !q.c } : { screen: 'trips', join: true };
   }
   if (head === 'lugar') {
     const id = q.id || parts[1];
@@ -78,7 +79,7 @@ export function parseRoute(path: string, search = ''): Route | null {
   if (head === 'viagem') {
     const legacy = !q.id;
     const id = q.id || parts[1];
-    if (!id) return { unknown: true };
+    if (!id) return { screen: 'trips' }; /* /viagem/ sem id: a lista de viagens */
     const tela = legacy ? parts[2] : q.tela;
     const dia = legacy ? parts[3] : q.dia;
     if (!tela) return { screen: 'trip', tripId: id, legacy };

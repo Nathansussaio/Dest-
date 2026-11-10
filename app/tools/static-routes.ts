@@ -50,4 +50,18 @@ const nf = src
   .replace(/<main class="pre">[\s\S]*?<\/main>/, '<main class="pre" aria-busy="true"><p style="font:15px -apple-system,Segoe UI,Roboto,sans-serif;color:#5F6166;text-align:center;margin-top:30vh">Carregando o Destí…</p></main>')
   .replace(/<head>/, '<head>' + redirect);
 fs.writeFileSync(path.join(dist, '404.html'), nf);
+/* _redirects: regras de redirecionamento (301) para hospedagens que aceitam regras, como Cloudflare Pages e Netlify.
+   O GitHub Pages ignora este arquivo; nele o 404.html faz a troca no navegador. Com o domínio próprio
+   atrás do Cloudflare (ou o site no Cloudflare Pages), os endereços antigos passam a responder 301, não 404. */
+const R = (from: string, to: string) => base + from + '  ' + base + to + '  301';
+fs.writeFileSync(path.join(dist, '_redirects'), [
+  '# Endereços antigos (id no caminho) para o formato novo (id na consulta). Gerado por tools/static-routes.ts.',
+  R('/viagem/:id/roteiro/:dia', '/viagem/?id=:id&tela=roteiro&dia=:dia'),
+  R('/viagem/:id/:tela', '/viagem/?id=:id&tela=:tela'),
+  R('/viagem/:id', '/viagem/?id=:id'),
+  R('/convite/:codigo', '/convite/?c=:codigo'),
+  R('/roteiro/:id', '/roteiro/?id=:id'),
+  R('/lugar/:id', '/lugar/?id=:id'),
+  ''
+].join('\n'));
 console.log('páginas por tela:', n, '+ 404.html');

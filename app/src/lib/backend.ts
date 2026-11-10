@@ -276,3 +276,25 @@ export async function cloudPublicDelete(id: string): Promise<Result<null>> {
     return error ? { ok: false, error: publicErr(error) } : { ok: true, value: null };
   } catch (e) { return { ok: false, error: publicErr(e) }; }
 }
+
+/* ---------- Link público do modo visitante (veja supabase/schema-publico-visitante.sql) ----------
+   Sem conta: o banco devolve uma chave secreta que fica só neste aparelho e serve para atualizar ou desativar o link.
+   'nofunc' = o banco ainda não tem essas funções (aí o site oferece "Criar conta e publicar roteiro"). */
+export async function cloudGuestPublish(id: string, tripId: string, data: any): Promise<{ ok: true; token: string } | { ok: false; error: string } | 'nofunc'> {
+  try {
+    const r: any = await withTimeout(sb().rpc('publish_guest_trip', { pid: id, tid: tripId, payload: data }), 15000);
+    if (r === 'timeout') return { ok: false, error: 'A conexão demorou demais. Tente de novo; sua viagem continua salva neste aparelho.' };
+    if (r.error) return noFunc(r.error) ? 'nofunc' : { ok: false, error: /too many links/i.test(String(r.error.message)) ? 'Muitos links foram criados agora. Tente de novo em alguns minutos.' : publicErr(r.error) };
+    return r.data ? { ok: true, token: String(r.data) } : { ok: false, error: 'Não foi possível criar o link agora. Tente de novo.' };
+  } catch (e) { return { ok: false, error: publicErr(e) }; }
+}
+export async function cloudGuestUpdate(id: string, token: string, data: any): Promise<boolean> {
+  try { const r: any = await withTimeout(sb().rpc('update_guest_trip', { pid: id, tok: token, payload: data }), 15000); return r !== 'timeout' && !r.error && !!r.data; } catch { return false; }
+}
+export async function cloudGuestDelete(id: string, token: string): Promise<Result<null>> {
+  try {
+    const r: any = await withTimeout(sb().rpc('delete_guest_trip', { pid: id, tok: token }), 15000);
+    if (r === 'timeout') return { ok: false, error: 'A conexão demorou demais. Tente de novo.' };
+    return r.error ? { ok: false, error: publicErr(r.error) } : { ok: true, value: null };
+  } catch (e) { return { ok: false, error: publicErr(e) }; }
+}

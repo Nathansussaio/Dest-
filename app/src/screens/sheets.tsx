@@ -397,25 +397,31 @@ function ShareSheet() {
   const t = A.currentTrip()!;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [needAccount, setNeedAccount] = useState(P.guestPublishUnavailable() && !!s.user && s.user.method === 'guest');
   const [sure, setSure] = useState(false);
+  const guest = !!s.user && s.user.method === 'guest';
   const url = t.publicId ? P.linkOf(t.publicId) : '';
   const text = shareText(t, s.reservations) + (url ? '\n\nVeja o roteiro completo: ' + url : '');
-  const make = async () => { if (busy) return; setBusy(true); setErr(''); const r = await P.createPublicLink(t.id); setBusy(false); if (r.error) setErr(r.error); else A.showToast('Link público pronto. Copie ou envie quando quiser.'); };
+  const make = async () => { if (busy) return; setBusy(true); setErr(''); const r = await P.createPublicLink(t.id); setBusy(false); if (r.needAccount) setNeedAccount(true); else if (r.error) setErr(r.error); else A.showToast('Link público pronto. Copie ou envie quando quiser.'); };
   const off = async () => { setBusy(true); const e = await P.disablePublicLink(t.id); setBusy(false); setSure(false); if (e) setErr(e); else A.showToast('Link desativado. Quem abrir o link verá que ele não existe mais.'); };
   return (
     <View>
-      {/* link público: abre em qualquer aparelho, sem conta, só para ver */}
+      {guest ? <Note kind="info">Modo visitante: esta viagem fica salva apenas neste aparelho e neste navegador.</Note> : null}
+      {guest ? <Gap h={12} /> : null}
+      {/* 1. link público: abre em qualquer aparelho, sem conta, só para ver */}
       <Card flat style={{ padding: 14, gap: 8, marginBottom: 16 }}>
-        <Row gap={8}><Icon name="link" size={18} color={c.acc} /><T v="lt">Compartilhar roteiro público (só para ver)</T></Row>
+        <Row gap={8}><Icon name="link" size={18} color={c.acc} /><T v="lt">Compartilhar roteiro público</T></Row>
         {!url ? (
           <>
-            <T v="smallMuted">Gera um link que qualquer pessoa abre sem conta, em qualquer navegador, para ver destino, datas e o que fazer em cada dia. Gastos, reservas, códigos e nomes não aparecem.</T>
-            {P.canPublish() ? <Btn icon="link" label={busy ? 'Gerando o link…' : 'Compartilhar roteiro público'} block onPress={make} /> : (
-              <>
-                <Note kind="info">Para gerar um link público, crie uma conta ou sincronize esta viagem. Enquanto isso, use Copiar texto ou Gerar PDF abaixo.</Note>
-                {s.user && s.user.method === 'guest' ? <Btn kind="secondary" label="Criar conta (a viagem vai junto)" block onPress={A.guestToSignup} /> : null}
-              </>
-            )}
+            <T v="smallMuted">Qualquer pessoa com o link poderá ver o destino, as datas e as atividades, sem acessar seus gastos, reservas ou dados pessoais. Abre em qualquer aparelho, sem conta.</T>
+            {!P.canPublish() ? <Note kind="info">Este site ainda não está ligado à nuvem, então não dá para publicar. Use as opções sem conta abaixo.</Note>
+              : needAccount ? (
+                <>
+                  <Note kind="info">O link público exige sincronização para que outras pessoas possam abrir este roteiro em outro aparelho. Crie uma conta: a viagem vai junto e o link é gerado logo depois.</Note>
+                  <Btn icon="link" label="Criar conta e publicar roteiro" block onPress={() => A.signupAndPublish(t.id)} />
+                </>
+              ) : <Btn icon="link" label={busy ? 'Publicando…' : 'Compartilhar roteiro público'} block onPress={make} />}
+            {guest && !needAccount && P.canPublish() ? <T v="smallMuted">Funciona no modo visitante: o controle do link (atualizar ou desativar) fica guardado neste aparelho.</T> : null}
           </>
         ) : (
           <>
@@ -435,22 +441,25 @@ function ShareSheet() {
         )}
         {err ? <Note kind="err">{err}</Note> : null}
       </Card>
-      {/* outro fluxo: editar junto (cada pessoa com a própria conta) */}
+      {/* 2. sem conta e sem publicar */}
       <Card flat style={{ padding: 14, gap: 8, marginBottom: 16 }}>
+        <Row gap={8}><Icon name="doc" size={18} color={c.acc} /><T v="lt">Compartilhar sem conta</T></Row>
+        <T v="smallMuted">Estas opções funcionam sem conta e não publicam sua viagem na internet. Códigos de reserva e valores não entram.</T>
+        <Card style={{ overflow: 'hidden' }}>
+          <ScrollView nestedScrollEnabled style={{ maxHeight: 180 }} contentContainerStyle={{ padding: 12 }}><T v="small" color={c.ink2}>{text}</T></ScrollView>
+        </Card>
+        <Btn icon="share" label="Enviar texto (WhatsApp, e-mail…)" block onPress={() => shareTextNative('Roteiro · ' + t.name, text)} />
+        <Row gap={10}>
+          <Btn grow kind="secondary" icon="copy" label="Copiar texto" onPress={async () => A.showToast((await copyText(text)) ? 'Roteiro copiado. Cole no WhatsApp, e-mail ou notas.' : 'Não foi possível copiar')} />
+          <Btn grow kind="secondary" icon="doc" label="Gerar PDF" onPress={async () => { if (!(await sharePdf(shareHtml(t), 'Roteiro ' + t.name))) A.showToast('Este navegador não deixou abrir o PDF. Libere janelas pop-up para este site ou use Copiar texto.'); }} />
+        </Row>
+      </Card>
+      {/* 3. editar junto (cada pessoa com a própria conta) */}
+      <Card flat style={{ padding: 14, gap: 8 }}>
         <Row gap={8}><Icon name="users" size={18} color={c.acc} /><T v="lt">Convidar para editar junto</T></Row>
-        <T v="smallMuted">Para quem vai com você: a pessoa entra com a própria conta e edita o roteiro, os gastos e as reservas. Não é o mesmo que o link público.</T>
+        <T v="smallMuted">A outra pessoa precisará entrar ou criar uma conta para editar o roteiro, os gastos e as reservas. Não é o mesmo que o link público.</T>
         <Btn kind="secondary" icon="users" label="Convidar para editar junto" block onPress={() => A.openSheet('people')} />
       </Card>
-      <T v="lt" style={{ marginBottom: 8 }}>Texto do roteiro</T>
-      <Card flat style={{ overflow: 'hidden' }}>
-        <ScrollView nestedScrollEnabled style={{ maxHeight: 200 }} contentContainerStyle={{ padding: 12 }}><T v="small" color={c.ink2}>{text}</T></ScrollView>
-      </Card>
-      <T v="smallMuted" style={{ marginTop: 8, marginBottom: 14 }}>Códigos de reserva e valores não entram no roteiro compartilhado.</T>
-      <Btn icon="share" label="Enviar texto (WhatsApp, e-mail…)" block onPress={() => shareTextNative('Roteiro · ' + t.name, text)} />
-      <Gap h={10} />
-      <Btn kind="secondary" icon="copy" label="Copiar texto" block onPress={async () => A.showToast((await copyText(text)) ? 'Roteiro copiado. Cole no WhatsApp, e-mail ou notas.' : 'Não foi possível copiar')} />
-      <Gap h={10} />
-      <Btn kind="secondary" icon="doc" label="Gerar PDF" block onPress={async () => { if (!(await sharePdf(shareHtml(t), 'Roteiro ' + t.name))) A.showToast('Este navegador não deixou abrir o PDF. Libere janelas pop-up para este site ou use Copiar texto.'); }} />
     </View>
   );
 }

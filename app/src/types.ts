@@ -44,6 +44,8 @@ export interface Trip {
   shared?: { owner: string; code?: string };
   /* link público só de leitura (id em public_trips; só neste aparelho/conta de quem criou) */
   publicId?: string;
+  /* link criado no modo visitante: chave secreta para atualizar ou desativar (só neste aparelho) */
+  publicToken?: string;
 }
 
 export interface Expense {

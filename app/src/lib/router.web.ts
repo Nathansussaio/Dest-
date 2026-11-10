@@ -34,7 +34,7 @@ export function titleFor(s: St): string {
   if (s.publicView) return publicTitle || 'Roteiro compartilhado · Destí';
   if (s.inviteView) return inviteTitle || 'Convite para viagem · Destí';
   if (s.notFound === 'checking') return 'Procurando a viagem · Destí';
-  if (s.notFound === 'private') return 'Viagem particular · Destí';
+  if (s.notFound === 'private') return 'Viagem não encontrada · Destí';
   if (s.notFound) return (s.notFound === 'trip' ? 'Viagem não encontrada' : s.notFound === 'place' ? 'Lugar não encontrado' : 'Página não encontrada') + ' · Destí';
   if (!s.user) return s.auth === 'login' ? 'Entrar · Destí' : s.auth === 'signup' ? 'Criar conta · Destí' : s.auth === 'forgot' ? 'Esqueci a senha · Destí' : HOME_TITLE;
   const t = s.tripId ? s.trips.find((x) => x.id === s.tripId) : null;
@@ -91,6 +91,7 @@ function apply(r: Route | null, pushHistory: boolean): boolean {
   if (r.tripId) extra.tripId = r.tripId;
   if (r.day != null) { const t = s.trips.find((x) => x.id === (r.tripId || s.tripId)); extra.day = t ? Math.max(0, Math.min(r.day, t.days.length - 1)) : 0; }
   if (r.placeId) extra.placeId = r.placeId;
+  if (r.join) { extra.sheet = 'join'; extra.sheetArg = null; }
   extra.history = TABS.indexOf(screen) >= 0 ? [] : pushHistory ? s.history.concat([s.screen]) : (screen === 'trip' ? ['trips'] : r.tripId ? ['trips', 'trip'] : ['home']);
   setState(extra);
   return true;

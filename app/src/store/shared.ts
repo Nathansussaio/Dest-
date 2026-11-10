@@ -87,8 +87,8 @@ function apply(row: SharedRow, me: string, base: LocalPart | null, merged?: Loca
     };
   }
   const code = local && local.trip.shared ? local.trip.shared.code : undefined;
-  const pub = local ? local.trip.publicId : undefined;
-  next = { ...next, trip: { ...next.trip, id: row.id, shared: { owner: row.owner, ...(code ? { code } : {}) }, ...(pub ? { publicId: pub } : {}) } };
+  const pub = local ? local.trip.publicId : undefined, pubTok = local ? local.trip.publicToken : undefined;
+  next = { ...next, trip: { ...next.trip, id: row.id, shared: { owner: row.owner, ...(code ? { code } : {}) }, ...(pub ? { publicId: pub } : {}), ...(pubTok ? { publicToken: pubTok } : {}) } };
   /* resumo do que veio da nuvem: se o conteúdo deste celular ficar diferente, ele é enviado */
   const h = hashOf(toShared({ ...remote, trip: { ...remote.trip, id: row.id } }, me));
   next = { ...next, trip: withMe(next.trip, row.owner, next.expenses) };
