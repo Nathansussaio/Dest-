@@ -1,0 +1,7 @@
+# Endereços antigos (id no caminho) para o formato novo (id na consulta). Gerado por tools/static-routes.ts.
+/Dest-/viagem/:id/roteiro/:dia  /Dest-/viagem/?id=:id&tela=roteiro&dia=:dia  301
+/Dest-/viagem/:id/:tela  /Dest-/viagem/?id=:id&tela=:tela  301
+/Dest-/viagem/:id  /Dest-/viagem/?id=:id  301
+/Dest-/convite/:codigo  /Dest-/convite/?c=:codigo  301
+/Dest-/roteiro/:id  /Dest-/roteiro/?id=:id  301
+/Dest-/lugar/:id  /Dest-/lugar/?id=:id  301
