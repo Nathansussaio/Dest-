@@ -46,6 +46,9 @@ export interface Trip {
   publicId?: string;
   /* link criado no modo visitante: chave secreta para atualizar ou desativar (só neste aparelho) */
   publicToken?: string;
+  /* como o grupo se desloca entre os lugares (sem valor: o app sugere por trecho) e escolhas por trecho */
+  travelMode?: 'walk' | 'car' | 'transit';
+  legModes?: Record<string, 'walk' | 'car' | 'transit'>;
 }
 
 export interface Expense {

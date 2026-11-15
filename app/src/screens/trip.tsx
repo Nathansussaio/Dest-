@@ -26,7 +26,7 @@ import {
 } from '../lib/trip';
 import { rankCandidates, slotOfTime } from '../lib/generator';
 import { intercity, intercityShort, MODE_ICON } from '../lib/intercity';
-import { transitLeg } from '../lib/transit';
+import { transitLeg, TRAVEL_MODES } from '../lib/transit';
 import { tripClimate } from '../lib/climate';
 import { tripMembers, groupBalances, settleUp, memberName, travelersOf } from '../lib/group';
 import {
@@ -1002,13 +1002,14 @@ export function Itinerary() {
   const prevPlace = (k: number) => { for (let j = k - 1; j >= 0; j--) if (shown[j].kind === 'place' && shown[j].placeId) return PLACE_BY_ID[shown[j].placeId!]; return null; };
 
   /* deslocamentos entre lugares seguidos */
-  let walk = 0, ride = 0, legsN = 0;
+  let walk = 0, ride = 0, drive = 0, legsN = 0;
   const rows: React.ReactNode[] = [];
   shown.forEach((x, k) => {
     const prev = shown[k - 1];
     if (!editing && x.kind === 'place' && prev && prev.kind === 'place' && x.placeId && prev.placeId && PLACE_BY_ID[x.placeId] && PLACE_BY_ID[prev.placeId]) {
-      const a = PLACE_BY_ID[prev.placeId], b = PLACE_BY_ID[x.placeId], lg = transitLeg(city, a, b), key = prev.id + '>' + x.id;
-      if (lg.mode === 'walk') walk += lg.minutes; else if (lg.mode !== 'far') ride += lg.minutes;
+      const key = prev.id + '>' + x.id, own = (t.legModes || {})[key] || null, chosen = own || t.travelMode || null;
+      const a = PLACE_BY_ID[prev.placeId], b = PLACE_BY_ID[x.placeId], lg = transitLeg(city, a, b, chosen);
+      if (lg.mode === 'walk') walk += lg.minutes; else if (lg.mode === 'car') drive += lg.minutes; else if (lg.mode !== 'far') ride += lg.minutes;
       legsN++;
       const open = transitOpen === key;
       rows.push(
@@ -1024,6 +1025,11 @@ export function Itinerary() {
             {open ? (
               <Card flat style={{ marginTop: 6, padding: 12, gap: 6 }}>
                 <T v="small" style={{ fontWeight: '700' }}>{a.name + ' → ' + b.name + ' · ' + lg.kmLabel}</T>
+                <T v="smallMuted">Neste trecho:</T>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 2 }}>
+                  {TRAVEL_MODES.map((m) => <Chip key={m.id} icon={m.icon} label={m.label} on={lg.mode === m.id} onPress={() => A.setLegMode(key, m.id)} />)}
+                  {own ? <Chip label={t.travelMode ? 'Como os outros trechos' : 'Sugestão do app'} onPress={() => A.setLegMode(key, null)} /> : null}
+                </View>
                 {lg.steps.map((st, i) => <T key={i} v="small">{(i + 1) + '. ' + st}</T>)}
                 {lg.mode === 'transit' ? <T v="small"><T v="small" style={{ fontWeight: '700' }}>Pagamento: </T>{lg.info.card}</T> : null}
                 {lg.info.tip ? <T v="smallMuted">{lg.info.tip}</T> : null}
@@ -1038,7 +1044,7 @@ export function Itinerary() {
     rows.push(<React.Fragment key={x.id}>{renderItem(x, k)}</React.Fragment>);
   });
   const fmtMin = (m: number) => (m >= 60 ? Math.floor(m / 60) + ' h' + (m % 60 ? ' ' + (m % 60) + ' min' : '') : m + ' min');
-  const transitSummary = legsN ? 'Deslocamentos estimados: ' + [ride ? fmtMin(ride) + ' de transporte' : '', walk ? fmtMin(walk) + ' a pé' : ''].filter(Boolean).join(' e ') : '';
+  const transitSummary = legsN ? 'Deslocamentos estimados: ' + [ride ? fmtMin(ride) + ' de transporte público' : '', drive ? fmtMin(drive) + ' de carro' : '', walk ? fmtMin(walk) + ' a pé' : ''].filter(Boolean).join(', ').replace(/, ([^,]*)$/, ' e $1') : '';
 
   function renderItem(x: ItineraryItem, k: number) {
     const p = x.kind === 'place' && x.placeId ? PLACE_BY_ID[x.placeId] : null;
@@ -1164,6 +1170,15 @@ export function Itinerary() {
         </View>
       ) : null}
       {!dayItems.length ? <Empty icon="calendar" title="Nenhuma atividade neste dia" text="Adicione lugares do catálogo ou peça uma sugestão." /> : null}
+      {legsN && !editing ? (
+        <View style={{ marginBottom: 10, gap: 6 }}>
+          <T v="small" style={{ fontWeight: '700' }}>Como vocês vão se deslocar</T>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            <Chip icon="sparkle" label="Sugestão do app" on={!t.travelMode} onPress={() => A.setTravelMode(null)} />
+            {TRAVEL_MODES.map((m) => <Chip key={m.id} icon={m.icon} label={m.label} on={t.travelMode === m.id} onPress={() => A.setTravelMode(m.id)} />)}
+          </View>
+        </View>
+      ) : null}
       {transitSummary && !editing ? <Row gap={6} style={{ marginBottom: 12 }}><Icon name="route" size={15} color={c.muted} /><Grow><T v="smallMuted">{transitSummary + ' · toque num trecho para ver como ir'}</T></Grow></Row> : null}
       {t.days.length > 1 && dayItems.length && !editing ? <Row gap={6} style={{ marginBottom: 12, marginTop: transitSummary ? -6 : 0 }}><Icon name="grip" size={15} color={c.muted} strokeWidth={3} /><Grow><T v="smallMuted">Para mudar uma atividade de dia, segure no ⠿ e arraste até o dia no topo.</T></Grow></Row> : null}
       {editing && shown.length > 1 ? <Row gap={6} style={{ marginBottom: 10 }}><Icon name="grip" size={15} color={c.muted} strokeWidth={3} /><Grow><T v="smallMuted">Segure no ⠿ e arraste para cima ou para baixo para mudar a ordem. Os horários do dia acompanham a nova ordem.</T></Grow></Row> : null}

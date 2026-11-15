@@ -182,6 +182,15 @@ export function moveItem(id: string, dir: -1 | 1) {
   });
 }
 /* arrastou para mudar a ordem do dia: os horários do dia ficam os mesmos, só trocam de dono na nova ordem */
+/* meio de transporte entre os lugares: para a viagem toda ou só para um trecho (null volta ao padrão) */
+export function setTravelMode(mode: 'walk' | 'car' | 'transit' | null) {
+  const t = currentTrip(); if (!t || (t.travelMode || null) === mode) return;
+  updateTrip((x) => { const n: Trip = { ...x, legModes: {} }; if (mode) n.travelMode = mode; else delete n.travelMode; return n; });
+  showToast(mode === 'walk' ? 'Trechos a pé' : mode === 'car' ? 'Trechos de carro' : mode === 'transit' ? 'Trechos de transporte público' : 'O app sugere o melhor meio em cada trecho');
+}
+export function setLegMode(key: string, mode: 'walk' | 'car' | 'transit' | null) {
+  updateTrip((x) => { const m = { ...(x.legModes || {}) }; if (mode && mode !== x.travelMode) m[key] = mode; else delete m[key]; return { ...x, legModes: m }; });
+}
 export function reorderDay(ids: string[]) {
   const t = currentTrip(); if (!t) return;
   const day = t.days[S().day] || [];
