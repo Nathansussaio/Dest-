@@ -181,6 +181,18 @@ export function moveItem(id: string, dir: -1 | 1) {
     return sortItems(items.map((x) => (x.id === a.id ? { ...x, time: b.time } : x.id === b.id ? { ...x, time: a.time } : x)));
   });
 }
+/* arrastou para mudar a ordem do dia: os horários do dia ficam os mesmos, só trocam de dono na nova ordem */
+export function reorderDay(ids: string[]) {
+  const t = currentTrip(); if (!t) return;
+  const day = t.days[S().day] || [];
+  if (ids.length !== day.length) return;
+  const times = day.map((x) => x.time).sort();
+  const byId: Record<string, ItineraryItem> = {};
+  day.forEach((x) => { byId[x.id] = x; });
+  const u = snap();
+  setDay(() => sortItems(ids.map((id, i) => ({ ...byId[id], time: times[i] }))));
+  showToast('Ordem do dia atualizada', u);
+}
 export function moveToDay(itemId: string, target: number) {
   const t = currentTrip(); if (!t) return;
   const from = S().day;

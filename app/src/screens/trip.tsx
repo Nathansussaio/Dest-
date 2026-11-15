@@ -893,6 +893,20 @@ export function Itinerary() {
   const dragRef = useRef<{ id: string; label: string; x: number; y: number; over: number | null } | null>(null);
   const [drag, setDragState] = useState<{ id: string; label: string; x: number; y: number; over: number | null } | null>(null);
   const setDrag = (d: typeof drag) => { dragRef.current = d; setDragState(d); };
+  /* modo Editar dia: segurar no ⠿ e arrastar para cima ou para baixo muda a ordem do dia */
+  const lay = useRef<Record<string, { y: number; h: number }>>({});
+  const rowEls = useRef<Record<string, any>>({});
+  /* mede a posição de cada cartão no começo do arraste */
+  const measureRows = () => {
+    Object.keys(rowEls.current).forEach((id) => {
+      const el = rowEls.current[id]; if (!el) return;
+      if (Platform.OS === 'web' && el.getBoundingClientRect) { const r = el.getBoundingClientRect(); lay.current[id] = { y: r.top, h: r.height }; }
+      else if (el.measureInWindow) el.measureInWindow((_x: number, y: number, _w: number, h: number) => { lay.current[id] = { y, h }; });
+    });
+  };
+  const reRef = useRef<{ id: string; from: number; dy: number; to: number } | null>(null);
+  const [re, setReState] = useState<{ id: string; from: number; dy: number; to: number } | null>(null);
+  const setRe = (v: typeof re) => { reRef.current = v; setReState(v); };
   if (!t) return <Screen><NoTrip /></Screen>;
   const dayIdx = Math.min(s.day, t.days.length - 1);
   const start = parseD(t.start), dDate = addDays(start, dayIdx), dayISO = iso(dDate);
@@ -939,6 +953,52 @@ export function Itinerary() {
       <Icon name="grip" size={18} color={c.faint} strokeWidth={3} />
     </View>
   );
+  /* para onde o item arrastado vai: conta quantos vizinhos ficaram acima do centro dele */
+  const targetOf = (id: string, dy: number) => {
+    const me = lay.current[id]; if (!me) return 0;
+    const center = me.y + me.h / 2 + dy;
+    let to = 0;
+    shown.forEach((x) => { if (x.id === id) return; const l = lay.current[x.id]; if (l && l.y + l.h / 2 < center) to++; });
+    return to;
+  };
+  /* um "pegador" fixo por item (recriar a cada quadro perderia o gesto em andamento) */
+  const shownRef = useRef(shown); shownRef.current = shown;
+  const targetRef = useRef(targetOf); targetRef.current = targetOf;
+  const resp = useRef<Record<string, any>>({});
+  const reorderer = (item: ItineraryItem) => {
+    if (resp.current[item.id]) return resp.current[item.id];
+    const id = item.id;
+    const r = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onShouldBlockNativeResponder: () => true,
+      onPanResponderGrant: () => { measureRows(); setMoveFor(null); const k = shownRef.current.findIndex((x) => x.id === id); setRe({ id, from: k, dy: 0, to: k }); },
+      onPanResponderMove: (_e: any, g: any) => { if (reRef.current) setRe({ ...reRef.current, dy: g.dy, to: targetRef.current(id, g.dy) }); },
+      onPanResponderRelease: () => {
+        const cur = reRef.current;
+        setRe(null);
+        if (!cur || cur.to === cur.from) return;
+        const ids = shownRef.current.map((x) => x.id).filter((x) => x !== cur.id);
+        ids.splice(cur.to, 0, cur.id);
+        A.reorderDay(ids);
+      },
+      onPanResponderTerminate: () => setRe(null)
+    });
+    resp.current[id] = r;
+    return r;
+  };
+  /* deslocamento visual de cada cartão enquanto um item é arrastado (os vizinhos abrem espaço) */
+  const shiftOf = (id: string, k: number) => {
+    if (!re) return 0;
+    if (id === re.id) return re.dy;
+    const h = (lay.current[re.id] ? lay.current[re.id].h : 0) + 8;
+    if (re.from < re.to && k > re.from && k <= re.to) return -h;
+    if (re.from > re.to && k >= re.to && k < re.from) return h;
+    return 0;
+  };
   const prevPlace = (k: number) => { for (let j = k - 1; j >= 0; j--) if (shown[j].kind === 'place' && shown[j].placeId) return PLACE_BY_ID[shown[j].placeId!]; return null; };
 
   /* deslocamentos entre lugares seguidos */
@@ -983,11 +1043,20 @@ export function Itinerary() {
   function renderItem(x: ItineraryItem, k: number) {
     const p = x.kind === 'place' && x.placeId ? PLACE_BY_ID[x.placeId] : null;
     if (editing) {
+      const moving = !!re && re.id === x.id;
       return (
-        <Card flat style={{ padding: 12, marginBottom: 8, gap: 10 }}>
-          <View>
-            <T v="lt" style={{ fontSize: 15 }} lines={2}>{itemName(x)}</T>
-            <T v="smallMuted">{p ? CAT_INFO[p.cat].label : x.kind === 'move' ? 'Deslocamento' : 'Anotação'}</T>
+        <View ref={(el: any) => { if (el) rowEls.current[x.id] = el; else delete rowEls.current[x.id]; }}
+          style={{ transform: [{ translateY: shiftOf(x.id, k) }], zIndex: moving ? 50 : 0, opacity: moving ? 0.96 : 1 }}>
+        <Card flat style={[{ padding: 12, marginBottom: 8, gap: 10 }, moving ? { backgroundColor: c.card, borderWidth: 1.5, borderColor: c.acc, shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6 } : null]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View {...reorderer(x).panHandlers} accessibilityLabel={'Segure e arraste para mudar a posição de ' + itemName(x) + ' no dia'}
+              style={[{ width: 34, height: 40, marginLeft: -6, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: moving ? c.accTint : 'transparent' }, Platform.OS === 'web' ? ({ cursor: moving ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none' } as any) : null]}>
+              <Icon name="grip" size={18} color={moving ? c.acc : c.faint} strokeWidth={3} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <T v="lt" style={{ fontSize: 15 }} lines={2}>{itemName(x)}</T>
+              <T v="smallMuted">{p ? CAT_INFO[p.cat].label : x.kind === 'move' ? 'Deslocamento' : 'Anotação'}</T>
+            </View>
           </View>
           <Row gap={6}>
             <TimeStepper label={'Horário de ' + itemName(x)} value={x.time} onChange={(v) => A.setItemTime(x.id, v)} />
@@ -999,6 +1068,7 @@ export function Itinerary() {
           </Row>
           {moveFor === x.id ? <View><T v="small" style={{ fontWeight: '700', marginBottom: 6 }}>Mover para</T><Chips>{t!.days.map((_, i) => i).filter((i) => i !== dayIdx).map((i) => <Chip key={i} label={'Dia ' + (i + 1)} onPress={() => { A.moveToDay(x.id, i); setMoveFor(null); }} />)}</Chips></View> : null}
         </Card>
+        </View>
       );
     }
     const closedNow = p && p.closed && p.closed.indexOf(dDate.getDay()) >= 0;
@@ -1096,8 +1166,9 @@ export function Itinerary() {
       {!dayItems.length ? <Empty icon="calendar" title="Nenhuma atividade neste dia" text="Adicione lugares do catálogo ou peça uma sugestão." /> : null}
       {transitSummary && !editing ? <Row gap={6} style={{ marginBottom: 12 }}><Icon name="route" size={15} color={c.muted} /><Grow><T v="smallMuted">{transitSummary + ' · toque num trecho para ver como ir'}</T></Grow></Row> : null}
       {t.days.length > 1 && dayItems.length && !editing ? <Row gap={6} style={{ marginBottom: 12, marginTop: transitSummary ? -6 : 0 }}><Icon name="grip" size={15} color={c.muted} strokeWidth={3} /><Grow><T v="smallMuted">Para mudar uma atividade de dia, segure no ⠿ e arraste até o dia no topo.</T></Grow></Row> : null}
-      {rows}
-      {editing ? <T v="smallMuted" style={{ marginBottom: 10 }}>Use − e + para mudar o horário. As setas trocam a posição de dois itens vizinhos; o calendário leva o item a outro dia. Ao concluir, o dia é ordenado por horário.</T> : null}
+      {editing && shown.length > 1 ? <Row gap={6} style={{ marginBottom: 10 }}><Icon name="grip" size={15} color={c.muted} strokeWidth={3} /><Grow><T v="smallMuted">Segure no ⠿ e arraste para cima ou para baixo para mudar a ordem. Os horários do dia acompanham a nova ordem.</T></Grow></Row> : null}
+      {editing ? <View style={{ position: 'relative' }}>{rows}</View> : rows}
+      {editing ? <T v="smallMuted" style={{ marginBottom: 10 }}>Use − e + para mudar o horário. As setas também trocam a posição de dois itens vizinhos; o calendário leva o item a outro dia. Ao concluir, o dia é ordenado por horário.</T> : null}
 
       {suggest !== false ? (
         <Card style={{ padding: 16, gap: 10, marginTop: 6 }}>
